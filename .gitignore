@@ -1,0 +1,64 @@
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Environment Variables (NEVER commit this)
+.env
+.env.local
+.env.production
+
+# Data files (too large for git)
+data/raw/
+data/processed/
+data/embeddings/
+
+# ChromaDB database files
+chroma_db/
+*.db
+*.sqlite
+
+# ML Models (too large for git)
+models/
+*.bin
+*.pt
+*.pth
+*.onnx
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Reports output
+reports/output/
+*.pdf
