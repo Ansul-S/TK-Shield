@@ -2,6 +2,7 @@
 
 from src.search.vector_store import search as semantic_search
 from src.search.keyword_search import KeywordSearchEngine
+from src.utils.config import config
 
 
 def reciprocal_rank_fusion(
@@ -86,13 +87,18 @@ class HybridSearchEngine:
         Run both searches and fuse results
         """
         # Run semantic search
-        sem_results = semantic_search("patents", query, n_results=n_results)
+        sem_results = semantic_search(config.PATENTS_COLLECTION, query, n_results=n_results)
 
         # Run keyword search
         kw_results = self.keyword_engine.search(query, n_results=n_results)
 
-        # Fuse with RRF
-        hybrid_results = reciprocal_rank_fusion(sem_results, kw_results)
+        # Fuse with RRF (weights + k from config)
+        hybrid_results = reciprocal_rank_fusion(
+            sem_results, kw_results,
+            k=config.RRF_K,
+            semantic_weight=config.SEMANTIC_WEIGHT,
+            keyword_weight=config.KEYWORD_WEIGHT,
+        )
 
         return hybrid_results[:n_results]
 

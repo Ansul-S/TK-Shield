@@ -1,0 +1,40 @@
+# TK-Shield dependencies
+# Pinned to the versions in the project venv (June 2026).
+# Core pipeline runs fully offline with zero API keys.
+
+# --- Core ML / search ---
+chromadb==1.5.9
+sentence-transformers==5.4.1
+rank-bm25==0.2.2
+scikit-learn==1.8.0
+numpy==2.4.4
+torch==2.11.0
+transformers==5.8.0
+huggingface-hub==1.14.0
+datasets==4.8.5
+
+# --- NLP ---
+spacy==3.8.14
+nltk==3.9.4
+# spaCy English model — install separately:
+#   python -m spacy download en_core_web_sm
+
+# --- Data / ingestion ---
+pandas==3.0.2
+tqdm==4.67.3
+
+# --- Web API ---
+fastapi==0.121.2
+uvicorn==0.46.0
+httpx==0.28.1
+pydantic==2.13.4
+
+# --- Reporting ---
+reportlab==4.4.4
+
+# --- Config / logging ---
+python-dotenv==1.2.2
+loguru==0.7.3
+
+# --- Tests ---
+pytest==8.4.2

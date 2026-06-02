@@ -1,0 +1,165 @@
+# src/registry/tk_store.py
+#
+# CRUD store for documented Traditional Knowledge entries — the "watched"
+# TK that the defensive-monitoring use case checks against patents.
+#
+# Two layers, kept in sync:
+#   1. SQLite (structured metadata, source of truth)
+#   2. ChromaDB `tk_entries` collection (semantic index for similarity search)
+#
+# On create, the existing dictionary NER auto-populates plants/uses/locations
+# so the entry is immediately enriched without manual tagging.
+
+import json
+import sqlite3
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+
+from loguru import logger
+
+from src.nlp.ner_extractor import extract_all
+from src.search import vector_store
+from src.utils.config import config
+
+_JSON_FIELDS = ("plants", "uses", "locations")
+_COLUMNS = (
+    "tk_id", "practice_name", "description", "community", "country",
+    "documentation_date", "category", "plants", "uses", "locations", "created_at",
+)
+
+
+def _connect() -> sqlite3.Connection:
+    Path(config.TK_DB_PATH).parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(config.TK_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db() -> None:
+    """Create the table if it does not exist (idempotent)."""
+    with _connect() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tk_entries (
+                tk_id              TEXT PRIMARY KEY,
+                practice_name      TEXT NOT NULL,
+                description        TEXT,
+                community          TEXT,
+                country            TEXT,
+                documentation_date TEXT,
+                category           TEXT,
+                plants             TEXT,
+                uses               TEXT,
+                locations          TEXT,
+                created_at         TEXT
+            )
+            """
+        )
+
+
+def _row_to_entry(row: sqlite3.Row) -> dict:
+    entry = {k: row[k] for k in row.keys()}
+    for f in _JSON_FIELDS:
+        entry[f] = json.loads(entry.get(f) or "[]")
+    return entry
+
+
+def add_entry(data: dict) -> dict:
+    """
+    Create a TK entry. Required: practice_name. Auto-extracts plants/uses/
+    locations from practice_name + description via NER (unless supplied).
+    Persists to SQLite and indexes into the tk_entries ChromaDB collection.
+    """
+    init_db()
+    tk_id = data.get("tk_id") or f"TK-{uuid.uuid4().hex[:8].upper()}"
+    practice_name = (data.get("practice_name") or "").strip()
+    if not practice_name:
+        raise ValueError("practice_name is required")
+    description = data.get("description", "")
+
+    # Auto-NER if entities not provided.
+    text = f"{practice_name}. {description}"
+    ents = extract_all(text)["tk_entities"]
+    plants = data.get("plants") or ents["plants"]
+    uses = data.get("uses") or ents["medical_uses"]
+    locations = data.get("locations") or ents["locations"]
+
+    entry = {
+        "tk_id": tk_id,
+        "practice_name": practice_name,
+        "description": description,
+        "community": data.get("community", ""),
+        "country": (data.get("country", "") or "").upper(),
+        "documentation_date": data.get("documentation_date", ""),
+        "category": data.get("category", ""),
+        "plants": plants,
+        "uses": uses,
+        "locations": locations,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    with _connect() as conn:
+        conn.execute(
+            f"INSERT OR REPLACE INTO tk_entries ({','.join(_COLUMNS)}) "
+            f"VALUES ({','.join('?' for _ in _COLUMNS)})",
+            tuple(
+                json.dumps(entry[c]) if c in _JSON_FIELDS else entry[c]
+                for c in _COLUMNS
+            ),
+        )
+
+    # Index into ChromaDB for semantic TK-to-TK / TK-to-patent search.
+    vector_store.add_documents(
+        collection_name=config.TK_COLLECTION,
+        documents=[text],
+        metadatas=[{
+            "tk_id": tk_id,
+            "practice_name": practice_name,
+            "country": entry["country"],
+            "documentation_date": entry["documentation_date"],
+        }],
+        ids=[tk_id],
+    )
+    logger.success(f"Registered TK entry {tk_id}: {practice_name}")
+    return entry
+
+
+def get_entry(tk_id: str) -> dict | None:
+    init_db()
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM tk_entries WHERE tk_id = ?", (tk_id,)).fetchone()
+    return _row_to_entry(row) if row else None
+
+
+def list_entries() -> list[dict]:
+    init_db()
+    with _connect() as conn:
+        rows = conn.execute("SELECT * FROM tk_entries ORDER BY created_at DESC").fetchall()
+    return [_row_to_entry(r) for r in rows]
+
+
+def delete_entry(tk_id: str) -> bool:
+    init_db()
+    with _connect() as conn:
+        cur = conn.execute("DELETE FROM tk_entries WHERE tk_id = ?", (tk_id,))
+        deleted = cur.rowcount > 0
+    if deleted:
+        try:
+            vector_store.get_or_create_collection(config.TK_COLLECTION).delete(ids=[tk_id])
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"Could not remove {tk_id} from ChromaDB: {e}")
+    return deleted
+
+
+if __name__ == "__main__":
+    e = add_entry({
+        "practice_name": "Turmeric paste for wound healing",
+        "description": "Haldi applied to cuts and abrasions in Ayurveda",
+        "community": "Traditional Ayurvedic communities",
+        "country": "IN",
+        "documentation_date": "1950-01-01",
+        "category": "Medicinal",
+    })
+    print("Created:", e["tk_id"], "| plants:", e["plants"], "| uses:", e["uses"])
+    print("List count:", len(list_entries()))
