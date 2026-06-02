@@ -32,6 +32,10 @@ data/embeddings/
 chroma_db/
 *.db
 *.sqlite
+*.sqlite3
+
+# TK registry (local SQLite)
+data/tk_registry.sqlite3
 
 # ML Models (too large for git)
 models/

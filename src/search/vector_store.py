@@ -1,11 +1,13 @@
 # src/search/vector_store.py
 
 import chromadb
-from chromadb.config import Settings
 from src.embeddings.embed_pipeline import embed_text, embed_batch
+from src.utils.config import config
 
-# Initialize ChromaDB — stores data locally in a folder called chroma_db
-client = chromadb.PersistentClient(path="./chroma_db")
+# Initialize ChromaDB — persistent on disk at the configured path.
+# Two collections live here: patents (config.PATENTS_COLLECTION) and
+# documented TK entries (config.TK_COLLECTION).
+client = chromadb.PersistentClient(path=config.CHROMA_DB_PATH)
 
 
 def get_or_create_collection(name: str):

@@ -2,10 +2,12 @@
 
 from sentence_transformers import SentenceTransformer
 import numpy as np
+from src.utils.config import config
 
-# Load the model — this downloads ~90MB the first time
-# all-MiniLM-L6-v2 converts any text into a 384-dimensional vector
-model = SentenceTransformer('all-MiniLM-L6-v2')
+# Load the model — this downloads ~90MB the first time.
+# Default all-MiniLM-L6-v2 converts any text into a 384-dimensional vector.
+# Model name comes from config (EMBEDDING_MODEL), nothing hardcoded.
+model = SentenceTransformer(config.EMBEDDING_MODEL)
 
 
 def embed_text(text: str) -> list:
