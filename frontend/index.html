@@ -58,15 +58,28 @@
   .draft { background:var(--bg); border-left:3px solid var(--accent2); padding:12px 14px;
     border-radius:0 6px 6px 0; white-space:pre-wrap; }
   .err { color:#ff9a9a; }
+  #roles { display:flex; gap:6px; margin-left:20px; }
+  button.role { background:transparent; color:var(--muted); border:1px solid var(--line);
+    padding:6px 12px; font-weight:600; }
+  button.role.active { background:var(--accent2); color:#06121f; border-color:var(--accent2); }
+  section.full { height:calc(100vh - 57px); }
+  .verdict { font-size:18px; font-weight:800; padding:4px 12px; border-radius:999px; }
+  .v-high{background:#5b1a1a;color:#ff9a9a;} .v-medium{background:#5b551a;color:#f0e58a;}
+  .v-low{background:#1a4b3a;color:#8af0c4;}
+  .bar { background:var(--accent2); height:10px; border-radius:3px; display:inline-block; vertical-align:middle; }
 </style>
 </head>
 <body>
 <header>
   <h1>🛡️ TK-Shield</h1>
-  <span class="tag">Defensive bio-piracy monitoring for Traditional Knowledge</span>
+  <nav id="roles">
+    <button class="role active" data-role="defender" onclick="setRole('defender')">🛡️ Defender</button>
+    <button class="role" data-role="examiner" onclick="setRole('examiner')">⚖️ Examiner</button>
+    <button class="role" data-role="researcher" onclick="setRole('researcher')">📊 Researcher</button>
+  </nav>
   <span id="health"></span>
 </header>
-<main>
+<main id="view-defender">
   <aside>
     <h2>Documented TK</h2>
     <div id="entries"><span class="spin">Loading…</span></div>
@@ -103,6 +116,23 @@
     </div>
   </section>
 </main>
+
+<!-- Examiner: reverse novelty check against the TK registry -->
+<section class="content full" id="view-examiner" style="display:none">
+  <h2>Examiner — patent novelty vs documented TK</h2>
+  <p class="muted">Paste a patent's text (or claim/abstract). TK-Shield searches the
+     documented Traditional-Knowledge registry for prior art and judges novelty.</p>
+  <textarea id="ex_text" style="min-height:120px" placeholder="Paste patent title + abstract / claim text here…"></textarea>
+  <div class="row"><button onclick="runNovelty()">⚖️ Check novelty</button></div>
+  <div id="ex_out"></div>
+</section>
+
+<!-- Researcher: corpus + registry statistics -->
+<section class="content full" id="view-researcher" style="display:none">
+  <h2>Researcher — corpus & registry analytics</h2>
+  <div class="row"><button onclick="loadStats()">📊 Refresh stats</button></div>
+  <div id="rs_out"><span class="spin">Loading…</span></div>
+</section>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -248,6 +278,60 @@ function openMarkdown(){
     .then(r=>r.text()).then(t=>{
       const w = window.open('', '_blank'); w.document.write('<pre>'+t.replace(/</g,'&lt;')+'</pre>');
     });
+}
+
+// ---------------- role switching ----------------
+let statsLoaded = false;
+function setRole(role){
+  for (const v of ['defender','examiner','researcher']) {
+    document.getElementById('view-'+v).style.display = (v===role) ? '' : 'none';
+  }
+  document.querySelectorAll('button.role').forEach(b =>
+    b.classList.toggle('active', b.dataset.role===role));
+  if (role==='researcher' && !statsLoaded) loadStats();
+}
+
+// ---------------- examiner: novelty ----------------
+async function runNovelty(){
+  const text = document.getElementById('ex_text').value.trim();
+  if(!text){ document.getElementById('ex_out').innerHTML='<span class="err">Paste some patent text first.</span>'; return; }
+  document.getElementById('ex_out').innerHTML = '<span class="spin">Searching TK registry for prior art…</span>';
+  try{
+    const j = await api('/api/novelty', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({patent_text:text, n_results:5})});
+    const vclass = j.confidence==='high'?'v-high':(j.confidence==='medium'?'v-medium':'v-low');
+    const rows = (j.matches||[]).map(m=>`<tr><td>${m.tk_id||''}</td><td>${m.practice_name||''}</td><td>${m.domain||''}</td><td>${m.similarity}</td></tr>`).join('');
+    document.getElementById('ex_out').innerHTML =
+      `<div class="card"><span class="verdict ${vclass}">${j.verdict}</span>
+        <span class="muted" style="margin-left:10px">top similarity ${j.top_similarity}</span></div>
+       <div class="card assessment">${md(j.assessment||'')}${j.llm_used?'':'<div class="muted" style="font-size:12px">ℹ️ Offline narrative; similarity exact.</div>'}</div>
+       ${rows?`<div class="card"><h2>Matching TK prior art</h2><table><tr><th>TK id</th><th>Practice</th><th>Domain</th><th>Sim</th></tr>${rows}</table></div>`:'<div class="card muted">No TK prior art matched.</div>'}`;
+  }catch(e){ document.getElementById('ex_out').innerHTML = '<span class="err">'+e.message+'</span>'; }
+}
+
+// ---------------- researcher: stats ----------------
+function distBars(obj){
+  const entries = Object.entries(obj||{}); if(!entries.length) return '<span class="muted">none</span>';
+  const max = Math.max(...entries.map(([,v])=>v), 1);
+  return entries.sort((a,b)=>b[1]-a[1]).map(([k,v])=>
+    `<div style="margin:3px 0"><span style="display:inline-block;width:130px">${k}</span>
+       <span class="bar" style="width:${Math.max(6, Math.round(180*v/max))}px"></span> ${v}</div>`).join('');
+}
+async function loadStats(){
+  statsLoaded = true;
+  document.getElementById('rs_out').innerHTML = '<span class="spin">Loading…</span>';
+  try{
+    const j = await api('/api/stats');
+    const topC = (j.registry.top_countries||[]).map(([c,n])=>`${c}: ${n}`).join(' · ') || '—';
+    const topA = (j.patents.top_assignees||[]).map(([a,n])=>`<tr><td>${a}</td><td>${n}</td></tr>`).join('');
+    document.getElementById('rs_out').innerHTML =
+      `<div class="card"><h2>TK registry — ${j.registry.total} entries</h2>
+        <strong>By domain</strong>${distBars(j.registry.by_domain)}
+        <div style="margin-top:8px"><strong>Top origin countries:</strong> <span class="muted">${topC}</span></div></div>
+       <div class="card"><h2>Patent corpus — ${j.patents.total} indexed <span class="muted">(sampled ${j.patents.sampled})</span></h2>
+        <strong>By domain</strong>${distBars(j.patents.by_domain)}
+        <div style="margin-top:8px"><strong>By source</strong>${distBars(j.patents.by_source)}</div>
+        ${topA?`<div style="margin-top:8px"><strong>Top assignees</strong><table><tr><th>Assignee</th><th>#</th></tr>${topA}</table></div>`:''}</div>`;
+  }catch(e){ document.getElementById('rs_out').innerHTML = '<span class="err">'+e.message+'</span>'; }
 }
 
 loadHealth(); loadEntries();

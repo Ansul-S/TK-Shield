@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from api.routes import analyze, monitor, report, tk
+from api.routes import analyze, monitor, novelty, report, stats, tk
 from src.registry import tk_store
 
 
@@ -51,6 +51,8 @@ app.include_router(tk.router)
 app.include_router(analyze.router)
 app.include_router(report.router)
 app.include_router(monitor.router)
+app.include_router(novelty.router)   # examiner
+app.include_router(stats.router)     # researcher
 
 # Serve the build-free static frontend at "/".
 _FRONTEND = Path(__file__).resolve().parent.parent / "frontend"

@@ -86,4 +86,4 @@ def test_patentsview_normalizes_results(monkeypatch):
     out = patentsview_client.search_patents("turmeric")
     assert out[0]["id"] == "US5401504A"
     assert out[0]["metadata"]["assignee"] == "Univ of Mississippi"
-    assert out[0]["metadata"]["source"] == "patentsview-live"
+    assert out[0]["metadata"]["source"] == "patentsview"

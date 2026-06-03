@@ -48,6 +48,9 @@ models/
 .vscode/
 *.code-workspace
 
+# Claude Code local settings
+.claude/
+
 # macOS
 .DS_Store
 .AppleDouble

@@ -15,10 +15,19 @@ from src.nlp.ner_extractor import extract_all
 from src.utils.config import config
 
 
-def _entry_query(tk_entry: dict) -> str:
-    """Build the search query from the TK practice name + description."""
+def build_query(tk_entry: dict) -> str:
+    """
+    Build the search query from practice name + description + any aliases
+    (folk / multilingual names). Including aliases broadens matching across
+    languages and synonyms — part of the coverage-breadth goal.
+    """
     parts = [tk_entry.get("practice_name", ""), tk_entry.get("description", "")]
+    parts += tk_entry.get("aliases", []) or []
     return ". ".join(p for p in parts if p).strip()
+
+
+# Backwards-compatible alias for internal callers.
+_entry_query = build_query
 
 
 def _ensure_entities(tk_entry: dict, query: str) -> tuple[list[str], list[str]]:

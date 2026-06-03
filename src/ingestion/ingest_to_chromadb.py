@@ -86,66 +86,61 @@ def load_patents_from_csv(csv_path: str) -> list[dict]:
     return patents
 
 
-def embed_and_store(patents: list[dict], batch_size: int = 64):
+def embed_and_store(patents: list[dict], batch_size: int | None = None,
+                    rebuild: bool = True):
     """
-    Generate embeddings and store in ChromaDB
-    Processes in batches to handle large datasets efficiently
-    """
-    # Initialize ChromaDB
-    client     = chromadb.PersistentClient(path=config.CHROMA_DB_PATH)
+    Generate embeddings and store in ChromaDB, in batches.
 
-    # Delete existing collection to start fresh
-    try:
-        client.delete_collection("patents")
-        logger.info("Deleted existing patents collection")
-    except Exception:
-        pass
+    rebuild=True  → drop and recreate the collection (deterministic full build).
+    rebuild=False → resume: skip ids already present, only embed the rest. Lets
+                    a large (tens of thousands) run recover after an interrupt.
+    """
+    batch_size = batch_size or config.EMBED_BATCH_SIZE
+    collection_name = config.PATENTS_COLLECTION
+    client = chromadb.PersistentClient(path=config.CHROMA_DB_PATH)
+
+    if rebuild:
+        try:
+            client.delete_collection(collection_name)
+            logger.info(f"Deleted existing '{collection_name}' collection")
+        except Exception:
+            pass
 
     collection = client.get_or_create_collection(
-        name="patents",
-        metadata={"hnsw:space": "cosine"}
+        name=collection_name, metadata={"hnsw:space": "cosine"}
     )
 
-    # Load embedding model
+    if not rebuild:
+        existing = set(collection.get(include=[])["ids"])
+        before = len(patents)
+        patents = [p for p in patents if p["id"] not in existing]
+        logger.info(f"Resume: {len(existing)} already indexed, {len(patents)}/{before} to add")
+
     logger.info(f"Loading embedding model: {config.EMBEDDING_MODEL}")
     model = SentenceTransformer(config.EMBEDDING_MODEL)
 
-    total    = len(patents)
+    total = len(patents)
     inserted = 0
-
     logger.info(f"Embedding and storing {total} patents in batches of {batch_size}...")
 
     for i in tqdm(range(0, total, batch_size), desc="Indexing patents"):
         batch = patents[i : i + batch_size]
-
-        texts     = [p["text"] for p in batch]
-        ids       = [p["id"] for p in batch]
-        metadatas = [p["metadata"] for p in batch]
-
-        # Generate embeddings
-        embeddings = model.encode(
-            texts,
-            normalize_embeddings=True,
-            show_progress_bar=False
-        ).tolist()
-
-        # Store in ChromaDB
+        texts = [p["text"] for p in batch]
+        embeddings = model.encode(texts, normalize_embeddings=True, show_progress_bar=False).tolist()
         collection.add(
             documents=texts,
             embeddings=embeddings,
-            metadatas=metadatas,
-            ids=ids
+            metadatas=[p["metadata"] for p in batch],
+            ids=[p["id"] for p in batch],
         )
-
         inserted += len(batch)
 
-    logger.success(f"Stored {inserted} patents in ChromaDB")
-    logger.success(f"ChromaDB path: {config.CHROMA_DB_PATH}")
-
+    logger.success(f"Stored {inserted} patents in '{collection_name}' ({config.CHROMA_DB_PATH})")
     return inserted
 
 
-def verify_search(collection_name: str = "patents"):
+def verify_search(collection_name: str = None):
+    collection_name = collection_name or config.PATENTS_COLLECTION
     """
     Run 3 test queries to verify everything works end-to-end
     """
@@ -188,11 +183,11 @@ if __name__ == "__main__":
     logger.info("TK-SHIELD — ChromaDB Ingestion")
     logger.info("=" * 55)
 
-    csv_path = "data/raw/patents_medicinal.csv"
+    csv_path = str(config.PATENTS_CSV)
 
     if not Path(csv_path).exists():
         logger.error(f"CSV not found at {csv_path}")
-        logger.error("Run python src/ingestion/patent_scraper.py first")
+        logger.error("Run `python -m src.ingestion.build_corpus` first")
         exit(1)
 
     # Step 1: Load and strictly filter

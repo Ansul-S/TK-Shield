@@ -52,9 +52,45 @@ class Config:
 
     # ── Ingestion / HTTP resilience ─────────────────────────
     BATCH_SIZE       = int(os.getenv("BATCH_SIZE", "50"))
+    EMBED_BATCH_SIZE = int(os.getenv("EMBED_BATCH_SIZE", "64"))
     MAX_RETRIES      = int(os.getenv("MAX_RETRIES", "3"))
     REQUEST_DELAY    = float(os.getenv("REQUEST_DELAY", "0.5"))
     HTTP_TIMEOUT     = float(os.getenv("HTTP_TIMEOUT", "15"))
+
+    # ── Corpus scale-up ─────────────────────────────────────
+    # Patent source for build_corpus:
+    #   "ccdv"            — keyless HuggingFace corpus (no download; low-fidelity metadata)
+    #   "patentsview_bulk"— keyless PatentsView bulk TSV (REAL metadata; ~219MB download) ← recommended
+    #   "patentsview"     — PatentsView live API harvest (real metadata; needs a free key)
+    PATENT_SOURCE    = os.getenv("PATENT_SOURCE", "ccdv")
+    MAX_PATENTS      = int(os.getenv("MAX_PATENTS", "5000"))
+
+    # PatentsView bulk (keyless public files; no API key/registration).
+    PATENTSVIEW_BULK_BASE = os.getenv(
+        "PATENTSVIEW_BULK_BASE", "https://s3.amazonaws.com/data.patentsview.org/download"
+    )
+    PATENTSVIEW_BULK_DIR  = os.getenv("PATENTSVIEW_BULK_DIR", "data/raw/bulk")
+    BULK_ENRICH_ASSIGNEE  = os.getenv("BULK_ENRICH_ASSIGNEE", "true").lower() == "true"
+    # CPC classes the PatentsView harvester pages through (bio-piracy-prone areas).
+    PATENT_CPC_CLASSES = [
+        c.strip() for c in os.getenv(
+            "PATENT_CPC_CLASSES",
+            "A61K36,A01H,A23L,A61K8,A61Q,C12N15"
+        ).split(",") if c.strip()
+    ]
+    # Cap for TK-registry importers (Dr. Duke / Wikidata).
+    TK_IMPORT_LIMIT  = int(os.getenv("TK_IMPORT_LIMIT", "500"))
+    # TK registry source: "duke" (CC0 ethnobotany) or "wikidata" (SPARQL).
+    TK_SOURCE        = os.getenv("TK_SOURCE", "duke")
+    # Dr. Duke's CC0 data. Point DUKE_CSV_PATH at a locally-downloaded
+    # ethnobotany CSV, or let the importer fetch the zip from DUKE_DATA_URL.
+    DUKE_CSV_PATH    = os.getenv("DUKE_CSV_PATH", "data/raw/duke_ethnobotany.csv")
+    DUKE_DATA_URL    = os.getenv(
+        "DUKE_DATA_URL",
+        "https://data.nal.usda.gov/system/files/Duke-Source-CSV.zip",
+    )
+    # Enrich imported plants with Wikidata multilingual aliases (slower; capped).
+    ENRICH_MULTILINGUAL = os.getenv("ENRICH_MULTILINGUAL", "false").lower() == "true"
 
     # ── Registry persistence ────────────────────────────────
     TK_DB_PATH       = os.getenv("TK_DB_PATH", "data/tk_registry.sqlite3")
@@ -68,6 +104,15 @@ class Config:
         "A23L33",   # Nutritional additives
         "A61K31",   # Organic chemistry medicines
     ]
+
+    # Domain → IPC/CPC prefixes, for tagging TK entries & patents across the
+    # broadened coverage (medicinal / agricultural / food / cosmetic).
+    DOMAIN_IPC_GROUPS = {
+        "medicinal":    ["A61K36", "A61K31", "A61P"],
+        "agricultural": ["A01H", "C12N15", "A01N"],
+        "food":         ["A23L", "A23F", "A21D"],
+        "cosmetic":     ["A61K8", "A61Q"],
+    }
 
     # Paths
     DATA_RAW_PATH       = Path("data/raw")

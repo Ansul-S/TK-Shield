@@ -18,6 +18,14 @@ TK entry (registry) → hybrid search over patents (RRF: semantic 0.7 + BM25 0.3
    (+ optional live PatentsView monitoring of newly-filed patents)
 ```
 
+## Three personas (one platform, no auth/workflow layer)
+
+- **Defender** (communities/NGOs): register TK → analyze/report/monitor → opposition draft. `routes/{tk,analyze,report,monitor}`.
+- **Examiner** (IP offices): paste a patent → reverse lookup over the `tk_entries` collection → novelty verdict + matching prior art. `src/rag/novelty.py`, `routes/novelty.py`.
+- **Researcher**: aggregate analytics over registry + patent corpus (domains, geography, assignees). `routes/stats.py`.
+
+The frontend (`frontend/index.html`) has a role switcher for the three.
+
 ## Environment & commands
 
 Dependencies are pinned in `requirements.txt`; run everything via the project `venv`.
@@ -29,9 +37,16 @@ venv/bin/python -m spacy download en_core_web_sm    # one-time
 ollama pull llama3.2
 
 # Data pipeline (run in order; produces data/raw/patents_medicinal.csv + chroma_db/):
-venv/bin/python -m src.ingestion.patent_scraper
-venv/bin/python -m src.ingestion.ingest_to_chromadb
-venv/bin/python -m src.ingestion.seed_landmark_cases   # add the real bio-piracy patents
+# Patent corpus — keyless real-metadata bulk (recommended; ~219MB one-time download):
+PATENT_SOURCE=patentsview_bulk MAX_PATENTS=20000 venv/bin/python -m src.ingestion.build_corpus
+# (or PATENT_SOURCE=ccdv for the zero-download, low-fidelity offline default)
+venv/bin/python -m src.ingestion.ingest_to_chromadb     # (re)build index from CSV
+venv/bin/python -m src.ingestion.seed_landmark_cases    # add the real bio-piracy patents
+# (legacy: `python -m src.ingestion.patent_scraper` still works as the ccdv path)
+
+# TK registry — build at scale from open sources:
+TK_SOURCE=duke     TK_IMPORT_LIMIT=2000 venv/bin/python -m src.ingestion.build_registry
+TK_SOURCE=wikidata TK_IMPORT_LIMIT=50   venv/bin/python -m src.ingestion.build_registry
 
 # Run the app (serves API + frontend at http://localhost:8000):
 venv/bin/uvicorn api.main:app --reload
@@ -69,7 +84,17 @@ Modules use absolute `src.*` / `api.*` imports rooted at the repo root — **run
 
 **Registry** (`src/registry/tk_store.py`) — CRUD for TK entries; SQLite (source of truth, `config.TK_DB_PATH`) + `tk_entries` ChromaDB collection. Auto-NER on create.
 
-**API** (`api/`) — `main.py` (app, CORS, serves `frontend/` static at `/`, lifespan inits the DB), `deps.py` (`lru_cache` singletons: hybrid engine from the CSV, LLM; `resolve_entry` loads by `tk_id` or builds ad-hoc), `schemas.py`, and `routes/`: `tk` (CRUD), `analyze` (fast search+score, no LLM/network), `report` (full RAG; `?format=json|markdown|pdf`), `monitor` (live PatentsView, degrades gracefully). `/api/health` reports LLM + live-patent availability.
+**Corpus scale-up** (`src/ingestion/`)
+- `sources/` — pluggable patent sources exposing `iter_patents(limit)`, selected by `config.PATENT_SOURCE`:
+  - **`patentsview_bulk`** (recommended) — keyless PatentsView **bulk TSV** S3 files (`g_patent` ~219MB + optional `g_assignee_disambiguated`). Real IDs/titles/abstracts/dates/assignees, **no key, no registration**. Streams + chunk-reads, regex-filters to TK relevance, caches under `config.PATENTSVIEW_BULK_DIR`. Frame-level logic (`patents_from_frame`, `assignee_map_from_frame`) is unit-tested.
+  - `ccdv_source` — keyless HF corpus (no download; low-fidelity synthetic metadata) — the zero-setup default.
+  - `patentsview_harvest` — PatentsView **live API** paged by CPC; real metadata but needs a free key. Kept optional; **not needed** now that bulk is keyless.
+  - `build_corpus.py` drives the chosen source → appends to the canonical CSV (dedup by id); `ingest_to_chromadb` rebuilds the index (batched + `rebuild=False` resume for large runs). **Rejected sources:** HUPD (`datasets`≥4 removed loading-script support → dead) and the PatentsView bulk *landing page* (redirects to the USPTO ODP sign-in migration) — but the underlying bulk **S3 files** remain public and keyless, which is what `patentsview_bulk` uses.
+- `tk_sources/` — pluggable TK-registry sources exposing `iter_tk_entries(limit)`: `duke_importer` (Dr. Duke CC0 ethnobotany, fuzzy column detection) and `wikidata_harvester` (curated cross-region seed + real Wikidata multilingual aliases). `build_registry.py` drives the chosen source → `tk_store.register_bulk` (batched). `config.TK_SOURCE`, `TK_IMPORT_LIMIT`.
+
+**Domain classifier** (`src/classifier/domain.py`) — `infer_domain(text, ipc)` tags medicinal/agricultural/food/cosmetic (CPC prefix via `config.DOMAIN_IPC_GROUPS`, else keywords). Used on TK entries (stored `domain` field) and in researcher stats.
+
+**API** (`api/`) — `main.py` (app, CORS, serves `frontend/` static at `/`, lifespan inits the DB), `deps.py` (`lru_cache` singletons: hybrid engine from the CSV, LLM; `resolve_entry` loads by `tk_id` or builds ad-hoc), `schemas.py`, and `routes/`: `tk` (CRUD), `analyze` (fast search+score, no LLM/network), `report` (full RAG; `?format=json|markdown|pdf`), `monitor` (live PatentsView, degrades gracefully), `novelty` (examiner reverse lookup), `stats` (researcher analytics). `/api/health` reports LLM + live-patent availability. Query building (`retriever.build_query`) folds TK aliases (folk/multilingual names) into the search.
 
 **Frontend** (`frontend/index.html`) — single, **dependency-free** static SPA (hand-written CSS, vanilla JS, tiny inline markdown renderer). No CDN/npm by design, so nothing rots. Served by FastAPI.
 
@@ -79,5 +104,5 @@ Modules use absolute `src.*` / `api.*` imports rooted at the repo root — **run
 - **Free APIs only.** Keyless & verified live: PubMed E-utilities, Wikidata, GBIF, HuggingFace datasets, Ollama. Live patents (PatentsView) need a *free* key — optional. Do not add paid/registration-gated APIs.
 - **Two TK keyword lists differ on purpose** — `patent_scraper.py` (broad) vs `ingest_to_chromadb.py` (strict `STRICT_TK_KEYWORDS`). The hybrid engine's BM25 is built from the strict-filtered CSV, and ChromaDB is rebuilt from the same set, so re-run `ingest_to_chromadb` after changing the corpus to keep them consistent.
 - **Patent record shape** is consistent everywhere: top-level `id`/`text` + a `metadata` dict (`patent_id`, `title`, `assignee`, `filing_date`, `country`, `ipc_code`, `status`, …). Preserve it when adding sources; `patentsview_client` and `seed_landmark_cases` both normalize to it.
-- **TK entry shape**: `tk_id, practice_name, description, community, country, documentation_date, category, plants[], uses[], locations[]`.
+- **TK entry shape**: `tk_id, practice_name, description, community, country, documentation_date, category, domain, plants[], uses[], locations[], aliases[]`. (`domain`/`aliases` added in scale-up; `tk_store.init_db` auto-migrates older DBs via `ALTER TABLE`.) Bulk imports use `tk_store.register_bulk`; single creates use `add_entry`.
 - `data/`, `chroma_db/`, and the SQLite registry are gitignored and built locally.

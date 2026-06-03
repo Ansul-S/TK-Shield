@@ -18,14 +18,16 @@ from pathlib import Path
 
 from loguru import logger
 
+from src.classifier.domain import infer_domain
 from src.nlp.ner_extractor import extract_all
 from src.search import vector_store
 from src.utils.config import config
 
-_JSON_FIELDS = ("plants", "uses", "locations")
+_JSON_FIELDS = ("plants", "uses", "locations", "aliases")
 _COLUMNS = (
     "tk_id", "practice_name", "description", "community", "country",
-    "documentation_date", "category", "plants", "uses", "locations", "created_at",
+    "documentation_date", "category", "domain", "plants", "uses", "locations",
+    "aliases", "created_at",
 )
 
 
@@ -37,7 +39,7 @@ def _connect() -> sqlite3.Connection:
 
 
 def init_db() -> None:
-    """Create the table if it does not exist (idempotent)."""
+    """Create the table if missing and migrate older DBs (idempotent)."""
     with _connect() as conn:
         conn.execute(
             """
@@ -49,13 +51,20 @@ def init_db() -> None:
                 country            TEXT,
                 documentation_date TEXT,
                 category           TEXT,
+                domain             TEXT,
                 plants             TEXT,
                 uses               TEXT,
                 locations          TEXT,
+                aliases            TEXT,
                 created_at         TEXT
             )
             """
         )
+        # Migrate DBs created before domain/aliases existed.
+        existing = {r[1] for r in conn.execute("PRAGMA table_info(tk_entries)")}
+        for col in ("domain", "aliases"):
+            if col not in existing:
+                conn.execute(f"ALTER TABLE tk_entries ADD COLUMN {col} TEXT")
 
 
 def _row_to_entry(row: sqlite3.Row) -> dict:
@@ -65,64 +74,108 @@ def _row_to_entry(row: sqlite3.Row) -> dict:
     return entry
 
 
-def add_entry(data: dict) -> dict:
-    """
-    Create a TK entry. Required: practice_name. Auto-extracts plants/uses/
-    locations from practice_name + description via NER (unless supplied).
-    Persists to SQLite and indexes into the tk_entries ChromaDB collection.
-    """
-    init_db()
-    tk_id = data.get("tk_id") or f"TK-{uuid.uuid4().hex[:8].upper()}"
+def _index_text(entry: dict) -> str:
+    """Text indexed for semantic search — includes aliases so folk/multilingual
+    names are findable."""
+    parts = [entry["practice_name"], entry["description"]] + entry.get("aliases", [])
+    return ". ".join(p for p in parts if p)
+
+
+def _build_entry(data: dict) -> dict:
+    """Normalize input into a full TK entry dict (auto-NER, domain, aliases)."""
     practice_name = (data.get("practice_name") or "").strip()
     if not practice_name:
         raise ValueError("practice_name is required")
     description = data.get("description", "")
-
-    # Auto-NER if entities not provided.
     text = f"{practice_name}. {description}"
     ents = extract_all(text)["tk_entities"]
     plants = data.get("plants") or ents["plants"]
     uses = data.get("uses") or ents["medical_uses"]
     locations = data.get("locations") or ents["locations"]
-
-    entry = {
-        "tk_id": tk_id,
+    domain = data.get("domain") or infer_domain(text, data.get("ipc_code", ""))
+    return {
+        "tk_id": data.get("tk_id") or f"TK-{uuid.uuid4().hex[:8].upper()}",
         "practice_name": practice_name,
         "description": description,
         "community": data.get("community", ""),
         "country": (data.get("country", "") or "").upper(),
         "documentation_date": data.get("documentation_date", ""),
         "category": data.get("category", ""),
+        "domain": domain,
         "plants": plants,
         "uses": uses,
         "locations": locations,
+        "aliases": data.get("aliases") or [],
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    with _connect() as conn:
-        conn.execute(
-            f"INSERT OR REPLACE INTO tk_entries ({','.join(_COLUMNS)}) "
-            f"VALUES ({','.join('?' for _ in _COLUMNS)})",
-            tuple(
-                json.dumps(entry[c]) if c in _JSON_FIELDS else entry[c]
-                for c in _COLUMNS
-            ),
-        )
 
-    # Index into ChromaDB for semantic TK-to-TK / TK-to-patent search.
+def _persist_sql(conn, entries: list[dict]) -> None:
+    conn.executemany(
+        f"INSERT OR REPLACE INTO tk_entries ({','.join(_COLUMNS)}) "
+        f"VALUES ({','.join('?' for _ in _COLUMNS)})",
+        [tuple(json.dumps(e[c]) if c in _JSON_FIELDS else e[c] for c in _COLUMNS)
+         for e in entries],
+    )
+
+
+def add_entry(data: dict) -> dict:
+    """
+    Create a single TK entry (auto NER + domain). Persists to SQLite and indexes
+    into the tk_entries ChromaDB collection. Used by the API.
+    """
+    init_db()
+    entry = _build_entry(data)
+    with _connect() as conn:
+        _persist_sql(conn, [entry])
     vector_store.add_documents(
         collection_name=config.TK_COLLECTION,
-        documents=[text],
-        metadatas=[{
-            "tk_id": tk_id,
-            "practice_name": practice_name,
-            "country": entry["country"],
-            "documentation_date": entry["documentation_date"],
-        }],
-        ids=[tk_id],
+        documents=[_index_text(entry)],
+        metadatas=[_chroma_meta(entry)],
+        ids=[entry["tk_id"]],
     )
-    logger.success(f"Registered TK entry {tk_id}: {practice_name}")
+    logger.success(f"Registered TK entry {entry['tk_id']}: {entry['practice_name']}")
     return entry
+
+
+def _chroma_meta(entry: dict) -> dict:
+    return {
+        "tk_id": entry["tk_id"],
+        "practice_name": entry["practice_name"],
+        "country": entry["country"],
+        "domain": entry.get("domain", ""),
+        "documentation_date": entry["documentation_date"],
+    }
+
+
+def register_bulk(entries: list[dict], chunk: int = 256) -> int:
+    """
+    Batch-register many TK entries (importers). Embeds + indexes in chunks so
+    thousands of entries are feasible. Returns the count registered.
+    """
+    init_db()
+    built = []
+    for d in entries:
+        try:
+            built.append(_build_entry(d))
+        except ValueError:
+            continue  # skip entries with no practice_name
+    if not built:
+        return 0
+
+    with _connect() as conn:
+        _persist_sql(conn, built)
+
+    for i in range(0, len(built), chunk):
+        part = built[i : i + chunk]
+        vector_store.add_documents(
+            collection_name=config.TK_COLLECTION,
+            documents=[_index_text(e) for e in part],
+            metadatas=[_chroma_meta(e) for e in part],
+            ids=[e["tk_id"] for e in part],
+        )
+    logger.success(f"Bulk-registered {len(built)} TK entries")
+    return len(built)
 
 
 def get_entry(tk_id: str) -> dict | None:
