@@ -58,27 +58,34 @@ def load_patents_from_csv(csv_path: str) -> list[dict]:
     df = pd.read_csv(csv_path)
     logger.info(f"Loaded {len(df)} patents from CSV")
 
+    def _s(val, default=""):
+        # NaN/empty cells must not become the literal string "nan".
+        if val is None or (isinstance(val, float) and pd.isna(val)):
+            return default
+        s = str(val).strip()
+        return default if s.lower() == "nan" else s
+
     patents = []
     for _, row in df.iterrows():
-        text = str(row.get("text", ""))
+        text = _s(row.get("text", ""))
 
         # Apply strict filter
         if not is_strictly_tk_relevant(text):
             continue
 
         patents.append({
-            "id":   str(row["id"]),
+            "id":   _s(row["id"]),
             "text": text,
             "metadata": {
-                "patent_id":   str(row.get("patent_id", "")),
-                "title":       str(row.get("title", ""))[:200],
-                "abstract":    str(row.get("abstract", ""))[:500],
-                "assignee":    str(row.get("assignee", "Unknown")),
-                "filing_date": str(row.get("filing_date", "")),
-                "country":     str(row.get("country", "US")),
-                "ipc_code":    str(row.get("ipc_code", "")),
-                "source":      str(row.get("source", "")),
-                "status":      str(row.get("status", "UNKNOWN"))
+                "patent_id":   _s(row.get("patent_id", "")),
+                "title":       _s(row.get("title", ""))[:200],
+                "abstract":    _s(row.get("abstract", ""))[:500],
+                "assignee":    _s(row.get("assignee", "Unknown")) or "Unknown",
+                "filing_date": _s(row.get("filing_date", "")),
+                "country":     _s(row.get("country", "US")) or "US",
+                "ipc_code":    _s(row.get("ipc_code", "")),
+                "source":      _s(row.get("source", "")),
+                "status":      _s(row.get("status", "UNKNOWN")) or "UNKNOWN",
             }
         })
 

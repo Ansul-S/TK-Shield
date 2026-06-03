@@ -152,6 +152,16 @@ function md(src){
   }).join('').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
 }
 
+// ---- display helpers (clean up raw data for presentation) ----
+function dash(v){
+  if (v === undefined || v === null) return '—';
+  const s = String(v).trim();
+  return (s === '' || s.toLowerCase() === 'nan' || s.toLowerCase() === 'none') ? '—' : s;
+}
+function cap(s){ s = String(s||''); return s ? s.charAt(0).toUpperCase()+s.slice(1) : s; }
+function trunc(s, n){ s = String(s||'').trim(); return s.length > n ? s.slice(0, n).trim()+'…' : s; }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
 async function api(path, opts){
   const r = await fetch(path, opts);
   if(!r.ok){ const e = await r.json().catch(()=>({detail:r.statusText})); throw new Error(e.detail||r.statusText); }
@@ -226,8 +236,8 @@ function riskCard(risk){
 function patentsTable(patents){
   if(!patents.length) return '<div class="card muted">No candidate patents found.</div>';
   const rows = patents.map(p=>`<tr>
-    <td>${p.patent_id||''}</td><td>${(p.title||'').slice(0,60)}</td>
-    <td>${p.assignee||''}</td><td>${p.filing_date||''}</td><td>${p.similarity??''}</td></tr>`).join('');
+    <td>${esc(p.patent_id||'')}</td><td>${esc(cap(trunc(p.title, 70)))}</td>
+    <td>${esc(dash(p.assignee))}</td><td>${esc(dash(p.filing_date))}</td><td>${dash(p.similarity)}</td></tr>`).join('');
   return `<div class="card"><h2>Closest patents</h2><table>
     <tr><th>Patent</th><th>Title</th><th>Assignee</th><th>Filed</th><th>Sim</th></tr>${rows}</table></div>`;
 }
@@ -261,7 +271,7 @@ async function runMonitor(){
   $('out').innerHTML = '<span class="spin">Checking live patents…</span>';
   try{
     const j = await api('/api/monitor', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tk_id:selected.tk_id, n_results:10})});
-    const pats = (j.patents||[]).map(p=>`<tr><td>${p.id}</td><td>${(p.metadata.title||'').slice(0,70)}</td><td>${p.metadata.filing_date||''}</td></tr>`).join('');
+    const pats = (j.patents||[]).map(p=>`<tr><td>${esc(p.id)}</td><td>${esc(cap(trunc(p.metadata.title,70)))}</td><td>${esc(dash(p.metadata.filing_date))}</td></tr>`).join('');
     $('out').innerHTML = `<div class="card">
       <h2>Live patent monitor</h2>
       <p class="${j.available?'':'muted'}">${j.note}</p>
@@ -313,8 +323,10 @@ function distBars(obj){
   const entries = Object.entries(obj||{}); if(!entries.length) return '<span class="muted">none</span>';
   const max = Math.max(...entries.map(([,v])=>v), 1);
   return entries.sort((a,b)=>b[1]-a[1]).map(([k,v])=>
-    `<div style="margin:3px 0"><span style="display:inline-block;width:130px">${k}</span>
-       <span class="bar" style="width:${Math.max(6, Math.round(180*v/max))}px"></span> ${v}</div>`).join('');
+    `<div style="display:flex;align-items:center;gap:8px;margin:4px 0">
+       <span style="flex:0 0 190px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(k)}">${esc(k)}</span>
+       <span class="bar" style="width:${Math.max(6, Math.round(180*v/max))}px"></span>
+       <span class="muted">${v}</span></div>`).join('');
 }
 async function loadStats(){
   statsLoaded = true;
