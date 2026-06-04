@@ -85,9 +85,11 @@ class Config:
     # Dr. Duke's CC0 data. Point DUKE_CSV_PATH at a locally-downloaded
     # ethnobotany CSV, or let the importer fetch the zip from DUKE_DATA_URL.
     DUKE_CSV_PATH    = os.getenv("DUKE_CSV_PATH", "data/raw/duke_ethnobotany.csv")
+    # Direct figshare download for Dr. Duke's CC0 "Duke-Source-CSV.zip"
+    # (the old data.nal.usda.gov path now 301s to a landing page).
     DUKE_DATA_URL    = os.getenv(
         "DUKE_DATA_URL",
-        "https://data.nal.usda.gov/system/files/Duke-Source-CSV.zip",
+        "https://ndownloader.figshare.com/files/43363335",
     )
     # Enrich imported plants with Wikidata multilingual aliases (slower; capped).
     ENRICH_MULTILINGUAL = os.getenv("ENRICH_MULTILINGUAL", "false").lower() == "true"

@@ -67,6 +67,8 @@
   .v-high{background:#5b1a1a;color:#ff9a9a;} .v-medium{background:#5b551a;color:#f0e58a;}
   .v-low{background:#1a4b3a;color:#8af0c4;}
   .bar { background:var(--accent2); height:10px; border-radius:3px; display:inline-block; vertical-align:middle; }
+  .pager { display:flex; align-items:center; gap:10px; margin-top:10px; font-size:13px; }
+  .pager button { padding:4px 10px; }
 </style>
 </head>
 <body>
@@ -82,7 +84,9 @@
 <main id="view-defender">
   <aside>
     <h2>Documented TK</h2>
+    <input id="tk_search" placeholder="🔍 Search practice, plant, country…" oninput="onSearch()" />
     <div id="entries"><span class="spin">Loading…</span></div>
+    <div id="tk_pager" class="pager"></div>
     <h2 style="margin-top:24px">Add entry</h2>
     <input id="f_name" placeholder="Practice name (e.g. Turmeric for wound healing)" />
     <textarea id="f_desc" placeholder="Description / folk usage"></textarea>
@@ -177,17 +181,45 @@ async function loadHealth(){
   }catch(e){ $('health').textContent = 'API offline'; }
 }
 
+let tkQuery = '', tkOffset = 0, tkTotal = 0, searchTimer = null;
+const TK_PAGE = 25;
+
 async function loadEntries(){
-  entries = await api('/api/tk');
-  $('entries').innerHTML = entries.length ? '' : '<span class="muted" style="font-size:13px">No entries yet.</span>';
+  const url = `/api/tk?q=${encodeURIComponent(tkQuery)}&limit=${TK_PAGE}&offset=${tkOffset}`;
+  const data = await api(url);
+  entries = data.items; tkTotal = data.total;
+  const box = $('entries');
+  box.innerHTML = entries.length ? '' :
+    `<span class="muted" style="font-size:13px">${tkQuery ? 'No matches.' : 'No entries yet.'}</span>`;
   entries.forEach(e=>{
     const d = document.createElement('div');
     d.className = 'entry' + (selected && selected.tk_id===e.tk_id ? ' active':'');
-    d.innerHTML = `<div class="pn">${e.practice_name}</div>
-      <div class="meta">${e.tk_id} · ${e.country||'—'} · ${(e.plants||[]).join(', ')||'no plants'}</div>`;
+    d.innerHTML = `<div class="pn">${esc(e.practice_name)}</div>
+      <div class="meta">${esc(e.tk_id)} · ${esc(dash(e.country))} · ${esc((e.plants||[]).join(', ')||'no plants')}</div>`;
     d.onclick = ()=>select(e);
-    $('entries').appendChild(d);
+    box.appendChild(d);
   });
+  renderPager();
+}
+
+function renderPager(){
+  const p = $('tk_pager');
+  if (tkTotal <= TK_PAGE){
+    p.innerHTML = tkTotal ? `<span class="muted">${tkTotal} entr${tkTotal===1?'y':'ies'}</span>` : '';
+    return;
+  }
+  const from = tkOffset+1, to = Math.min(tkOffset+TK_PAGE, tkTotal);
+  p.innerHTML =
+    `<button class="secondary" ${tkOffset===0?'disabled':''} onclick="pageTk(-1)">‹ Prev</button>
+     <span class="muted">${from}–${to} of ${tkTotal}</span>
+     <button class="secondary" ${to>=tkTotal?'disabled':''} onclick="pageTk(1)">Next ›</button>`;
+}
+
+function pageTk(dir){ tkOffset = Math.max(0, tkOffset + dir*TK_PAGE); loadEntries(); }
+
+function onSearch(){
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(()=>{ tkQuery = $('tk_search').value.trim(); tkOffset = 0; loadEntries(); }, 250);
 }
 
 function select(e){
@@ -213,6 +245,7 @@ async function addEntry(){
     const e = await api('/api/tk', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
     $('addmsg').textContent = `Added ${e.tk_id} · plants: ${(e.plants||[]).join(', ')||'—'}`;
     ['f_name','f_desc','f_country','f_date','f_community'].forEach(i=>$(i).value='');
+    tkQuery = ''; tkOffset = 0; $('tk_search').value = '';   // surface the new entry
     await loadEntries();
     select(e);
   }catch(err){ $('addmsg').innerHTML = '<span class="err">'+err.message+'</span>'; }

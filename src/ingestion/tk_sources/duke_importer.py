@@ -46,8 +46,10 @@ def _load_dataframe() -> pd.DataFrame | None:
         logger.error(f"Duke download failed ({e}). Set DUKE_CSV_PATH to a local file.")
         return None
 
-    if config.DUKE_DATA_URL.endswith(".zip"):
-        zf = zipfile.ZipFile(io.BytesIO(resp.content))
+    content = resp.content
+    # Detect a zip by magic bytes (the download URL may not end in .zip).
+    if content[:2] == b"PK":
+        zf = zipfile.ZipFile(io.BytesIO(content))
         names = [n for n in zf.namelist() if "ethnobot" in n.lower() and n.lower().endswith(".csv")]
         if not names:
             names = [n for n in zf.namelist() if n.lower().endswith(".csv")]
@@ -56,7 +58,7 @@ def _load_dataframe() -> pd.DataFrame | None:
             return None
         logger.info(f"Duke: using table {names[0]} from zip")
         return pd.read_csv(zf.open(names[0]), encoding="latin-1", on_bad_lines="skip")
-    return pd.read_csv(io.BytesIO(resp.content), encoding="latin-1", on_bad_lines="skip")
+    return pd.read_csv(io.BytesIO(content), encoding="latin-1", on_bad_lines="skip")
 
 
 def entries_from_dataframe(df: pd.DataFrame, limit: int) -> list[dict]:
@@ -69,34 +71,40 @@ def entries_from_dataframe(df: pd.DataFrame, limit: int) -> list[dict]:
         logger.error(f"Duke: could not detect taxon/use columns in {list(df.columns)}")
         return []
 
+    def _clean(v) -> str:
+        # Empty cells read by pandas become NaN → str "nan"; never keep those.
+        s = str(v).strip()
+        return "" if s.lower() in ("nan", "none", "") else s
+
     uses_by_taxon: dict[str, set] = defaultdict(set)
     country_by_taxon: dict[str, str] = {}
     cname_by_taxon: dict[str, str] = {}
     for _, row in df.iterrows():
-        taxon = str(row.get(taxon_col, "")).strip()
-        use = str(row.get(use_col, "")).strip()
-        if not taxon or not use or use.lower() == "nan":
+        taxon = _clean(row.get(taxon_col))
+        use = _clean(row.get(use_col))
+        if not taxon or not use:
             continue
         uses_by_taxon[taxon].add(use)
-        if country_col and taxon not in country_by_taxon:
-            country_by_taxon[taxon] = str(row.get(country_col, "")).strip()
-        if cname_col and taxon not in cname_by_taxon:
-            cname_by_taxon[taxon] = str(row.get(cname_col, "")).strip()
+        if country_col and not country_by_taxon.get(taxon):
+            country_by_taxon[taxon] = _clean(row.get(country_col))
+        if cname_col and not cname_by_taxon.get(taxon):
+            cname_by_taxon[taxon] = _clean(row.get(cname_col))
 
     entries = []
     for taxon, uses in uses_by_taxon.items():
         use_list = sorted(uses)[:25]
         cname = cname_by_taxon.get(taxon, "")
+        name = cname or taxon                       # never "nan"
         desc = f"Documented traditional/ethnobotanical uses of {taxon}: " + ", ".join(use_list) + "."
         entries.append({
-            "practice_name": f"{cname or taxon} — traditional uses",
+            "practice_name": f"{name} — traditional uses",
             "description": desc,
             "community": "Documented ethnobotany (Dr. Duke, USDA)",
-            "country": (country_by_taxon.get(taxon, "") or "")[:2].upper(),
+            "country": country_by_taxon.get(taxon, ""),   # full name; not truncated to garbage
             "documentation_date": "",
             "category": "ethnobotanical",
             "domain": infer_domain(desc),
-            "plants": [p for p in [taxon, cname] if p],
+            "plants": [p for p in [taxon, cname] if p],   # no "nan"
             "uses": use_list,
             "aliases": [cname] if cname else [],
         })

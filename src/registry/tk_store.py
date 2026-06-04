@@ -185,11 +185,40 @@ def get_entry(tk_id: str) -> dict | None:
     return _row_to_entry(row) if row else None
 
 
-def list_entries() -> list[dict]:
+def _search_clause(query: str | None) -> tuple[str, list]:
+    """Build a WHERE clause + params for a free-text search across key fields."""
+    if not query:
+        return "", []
+    like = f"%{query.strip()}%"
+    cols = ("practice_name", "description", "plants", "aliases", "country", "community")
+    clause = " WHERE " + " OR ".join(f"{c} LIKE ?" for c in cols)
+    return clause, [like] * len(cols)
+
+
+def list_entries(limit: int | None = None, offset: int = 0,
+                 query: str | None = None) -> list[dict]:
+    """
+    List TK entries newest-first. Optional free-text `query` (substring match
+    across name/description/plants/aliases/country/community) and `limit`/`offset`
+    pagination. With no limit, returns all (used by stats).
+    """
     init_db()
+    clause, params = _search_clause(query)
+    sql = f"SELECT * FROM tk_entries{clause} ORDER BY created_at DESC"
+    if limit is not None:
+        sql += " LIMIT ? OFFSET ?"
+        params = params + [limit, offset]
     with _connect() as conn:
-        rows = conn.execute("SELECT * FROM tk_entries ORDER BY created_at DESC").fetchall()
+        rows = conn.execute(sql, params).fetchall()
     return [_row_to_entry(r) for r in rows]
+
+
+def count_entries(query: str | None = None) -> int:
+    """Total entries matching `query` (for pagination)."""
+    init_db()
+    clause, params = _search_clause(query)
+    with _connect() as conn:
+        return conn.execute(f"SELECT COUNT(*) FROM tk_entries{clause}", params).fetchone()[0]
 
 
 def delete_entry(tk_id: str) -> bool:

@@ -17,8 +17,18 @@ def create_entry(entry: TKEntryIn) -> dict:
 
 
 @router.get("")
-def list_entries() -> list[dict]:
-    return tk_store.list_entries()
+def list_entries(q: str = "", limit: int = 25, offset: int = 0) -> dict:
+    """Paginated, searchable list. Returns {items, total, limit, offset, q}."""
+    limit = max(1, min(limit, 200))   # clamp page size
+    offset = max(0, offset)
+    query = q.strip() or None
+    return {
+        "items": tk_store.list_entries(limit=limit, offset=offset, query=query),
+        "total": tk_store.count_entries(query=query),
+        "limit": limit,
+        "offset": offset,
+        "q": q,
+    }
 
 
 @router.get("/{tk_id}")
