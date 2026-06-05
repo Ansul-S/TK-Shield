@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 from api.deps import get_engine, resolve_entry
 from api.schemas import AnalyzeIn
 from src.classifier.ip_risk_scorer import score_risk
+from src.rag.retriever import build_query
 
 router = APIRouter(prefix="/api/analyze", tags=["analyze"])
 
@@ -24,7 +25,7 @@ def analyze(req: AnalyzeIn) -> dict:
         raise HTTPException(status_code=400, detail=str(e))
 
     engine = get_engine()
-    query = ". ".join(p for p in [entry.get("practice_name", ""), entry.get("description", "")] if p)
+    query = build_query(entry)
     patents = engine.search(query, n_results=req.n_results) if query else []
     risk = score_risk(entry, patents)
 

@@ -8,28 +8,61 @@ nlp = spacy.load("en_core_web_sm")
 # These are dictionaries of terms we teach the system
 # In a real system this would be 1000s of entries from TKDL
 
+# Broadened across domains (medicinal, agricultural, food, cosmetic) and with
+# common transliterations (Hindi/regional) to aid multilingual coverage.
 PLANT_NAMES = {
-    "neem", "turmeric", "haldi", "azadirachta indica",
-    "curcuma longa", "basmati", "ashwagandha", "withania somnifera",
-    "tulsi", "ocimum sanctum", "brahmi", "bacopa monnieri",
-    "ayahuasca", "banisteriopsis caapi", "aloe vera", "giloy"
+    # India / Ayurveda
+    "neem", "azadirachta indica", "turmeric", "haldi", "curcuma longa",
+    "basmati", "ashwagandha", "withania somnifera", "tulsi", "holy basil",
+    "ocimum sanctum", "ocimum tenuiflorum", "brahmi", "bacopa monnieri",
+    "giloy", "tinospora cordifolia", "amla", "phyllanthus emblica", "aamla",
+    "shatavari", "asparagus racemosus", "arjuna", "terminalia arjuna",
+    "guggul", "kalmegh", "andrographis", "jamun", "methi", "fenugreek",
+    "trigonella foenum-graecum", "adrak", "ginger", "zingiber officinale",
+    "lehsun", "garlic", "allium sativum", "sandalwood", "santalum album",
+    "henna", "lawsonia inermis", "moringa", "moringa oleifera",
+    "black pepper", "piper nigrum", "frankincense", "boswellia serrata",
+    # China / TCM & East Asia
+    "ginseng", "panax ginseng", "ginkgo", "ginkgo biloba", "astragalus",
+    "ephedra", "ma huang", "cinnamon", "cinnamomum verum",
+    # Americas / Amazon / Andes
+    "ayahuasca", "banisteriopsis caapi", "maca", "lepidium meyenii",
+    "quinoa", "chenopodium quinoa", "cat's claw", "uncaria tomentosa",
+    # Africa / Arabia
+    "aloe vera", "aloe barbadensis", "rooibos", "aspalathus linearis",
+    "hoodia", "hoodia gordonii", "shea", "vitellaria paradoxa",
+    # Pacific
+    "kava", "piper methysticum",
 }
 
 KNOWLEDGE_SYSTEMS = {
     "ayurvedic", "ayurveda", "unani", "siddha", "tcm",
-    "traditional chinese medicine", "indigenous", "folk medicine",
-    "tribal", "ethnobotanical"
+    "traditional chinese medicine", "kampo", "indigenous", "folk medicine",
+    "tribal", "ethnobotanical", "ethnomedicine", "traditional knowledge",
 }
 
+# Kept key name "medical_uses" for compatibility, but now spans all domains.
 MEDICAL_USES = {
+    # Medicinal
     "wound healing", "antimalarial", "antifungal", "antibacterial",
-    "fever", "malaria", "skin infection", "inflammation",
-    "diabetes", "arthritis", "digestive", "antiviral"
+    "antimicrobial", "antiviral", "anti-inflammatory", "fever", "malaria",
+    "skin infection", "inflammation", "diabetes", "arthritis", "digestive",
+    "immunity", "memory", "respiratory", "ulcer", "pain relief",
+    # Agricultural
+    "pesticide", "insecticide", "pest control", "crop protection",
+    "yield improvement", "drought resistance", "plant variety",
+    # Food
+    "flavoring", "spice", "preservative", "sweetener", "beverage",
+    "nutrition", "dietary supplement", "fermented food",
+    # Cosmetic
+    "skin care", "hair care", "moisturizer", "fragrance", "dye",
+    "anti-aging", "complexion",
 }
 
 PRACTICES = {
     "decoction", "paste", "poultice", "extract", "infusion",
-    "fermentation", "distillation", "cold press", "tincture"
+    "fermentation", "distillation", "cold press", "tincture",
+    "powder", "churna", "oil", "pressing", "smoke", "wrap",
 }
 
 

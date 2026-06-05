@@ -29,24 +29,39 @@ python -m spacy download en_core_web_sm
 #    Install Ollama from https://ollama.com then:
 ollama pull llama3.2
 
-# 3. Build the patent corpus
-python -m src.ingestion.patent_scraper          # fetch + filter patents → CSV
+# 3. Build the patent corpus — keyless, REAL metadata (~219MB one-time download)
+PATENT_SOURCE=patentsview_bulk MAX_PATENTS=20000 python -m src.ingestion.build_corpus
 python -m src.ingestion.ingest_to_chromadb      # embed + index into ChromaDB
 python -m src.ingestion.seed_landmark_cases     # add the real bio-piracy cases
+# (or PATENT_SOURCE=ccdv for a zero-download, lower-fidelity offline corpus)
 
-# 4. Run
+# 4. Build the TK registry from open sources
+TK_SOURCE=duke     TK_IMPORT_LIMIT=2000 python -m src.ingestion.build_registry  # Dr. Duke CC0
+TK_SOURCE=wikidata TK_IMPORT_LIMIT=50   python -m src.ingestion.build_registry  # multilingual seed
+
+# 5. Run
 uvicorn api.main:app --reload
 # open http://localhost:8000
 ```
 
-## Using it
+## Scaling up the data
 
-- **Web dashboard** (`http://localhost:8000`): register a TK entry (plants/uses are auto-extracted), then run a quick risk check, a full RAG report, or live patent monitoring; export the report as markdown.
-- **API** (docs at `/docs`): `POST /api/tk`, `GET /api/tk`, `POST /api/analyze`, `POST /api/report?format=json|markdown|pdf`, `POST /api/monitor`, `GET /api/health`.
+- **Patents — no API key needed.** `PATENT_SOURCE=patentsview_bulk` downloads PatentsView's **public bulk TSV files** (no key, no registration) and gives real patent IDs, titles, abstracts, grant dates, and assignees — the fidelity the risk scorer needs. Files cache under `PATENTSVIEW_BULK_DIR`; drop pre-downloaded `*.tsv.zip` there to skip the download. `PATENT_SOURCE=ccdv` is a zero-download, lower-fidelity fallback. (A live-API harvester exists too but needs a free key and isn't required.)
+- **TK registry.** `TK_SOURCE=duke` imports Dr. Duke's CC0 ethnobotany (point `DUKE_CSV_PATH` at a local download, or let it fetch the zip). `TK_SOURCE=wikidata` adds a curated cross-region seed enriched with real Wikidata multilingual aliases.
+
+## Three personas (one platform)
+
+- **🛡️ Defender** — register TK, run risk analysis + a full RAG report, monitor live patents, export an opposition draft.
+- **⚖️ Examiner** — paste a patent's text; get a novelty verdict against the documented TK registry with the matching prior art.
+- **📊 Researcher** — analytics across the registry and patent corpus (domains, geography, top assignees).
+
+## API (docs at `/docs`)
+
+`POST /api/tk` · `GET /api/tk` · `POST /api/analyze` · `POST /api/report?format=json|markdown|pdf` · `POST /api/monitor` · `POST /api/novelty` · `GET /api/stats` · `GET /api/health`
 
 ## Optional: live patent monitoring
 
-PatentsView retired its keyless API in Feb 2025. To enable live monitoring of newly-filed US patents, request a **free** key at <https://patentsview.org/apis/keyrequest> and set `PATENTSVIEW_API_KEY` in `.env` (see `.env.example`). Without it, everything else still works.
+The whole pipeline — including the **real-metadata patent corpus** (`patentsview_bulk`) — runs with **zero API keys**. The only key-gated feature is the live "newly-filed patents" monitor tab, which uses PatentsView's live API. It's entirely optional; leave `PATENTSVIEW_API_KEY` blank and refresh the corpus from the bulk files instead.
 
 ## Configuration
 

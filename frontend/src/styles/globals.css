@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens — "Duna Light" (Frontend_Insp/duna.com-design.md): a calm, airy
+ * editorial system. Light surfaces, near-black ink, warm neutrals, pastel
+ * decorative accents, flat depth (no shadows — hierarchy via contrast +
+ * whitespace + thin borders).
+ *
+ * Two adaptations to TK-Shield's constraints, documented for traceability:
+ *  - Font: the spec calls for GT America (licensed). We self-host Inter (free
+ *    OFL variable grotesk, bundled — no runtime CDN) as the closest substitute.
+ *  - Risk scale (CRITICAL→MINIMAL) isn't in the Duna palette, so it's derived
+ *    here as restrained tinted chips with strong-contrast text — legible on
+ *    white without the "loud saturated UI colors" the spec warns against.
+ */
+@theme {
+  /* core palette */
+  --color-primary: #222221;
+  --color-secondary: #6c6a66;
+  --color-tertiary: #8f8a83;
+  --color-neutral: #f4f1ec;
+  --color-surface: #ffffff;
+  --color-background: #ffffff;
+  --color-text: #222221;
+  --color-border: #e5e7eb;
+  --color-muted: #9a948b;
+  --color-error: #d64545;
+
+  /* decorative pastel accents (imagery/illustration support — not core UI) */
+  --color-accent-warm: #f6c98d;
+  --color-accent-pink: #efc0cf;
+  --color-accent-sky: #c8d8e8;
+
+  /* derived risk scale — tinted bg + saturated-but-restrained fg */
+  --color-risk-critical-bg: #fbe9e9;
+  --color-risk-critical-fg: #b42318;
+  --color-risk-high-bg: #fbeedd;
+  --color-risk-high-fg: #9a5b00;
+  --color-risk-medium-bg: #f7f1da;
+  --color-risk-medium-fg: #7a6500;
+  --color-risk-low-bg: #e6f4ec;
+  --color-risk-low-fg: #1b7a4b;
+  --color-risk-minimal-bg: #f4f1ec;
+  --color-risk-minimal-fg: #6c6a66;
+
+  /* corner language: pills for CTAs/chips, small radii for inputs, md for cards */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --font-sans: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  /* body-md: relaxed, regular-weight reading voice */
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Hierarchy comes from scale + negative tracking, not weight (Duna tone). */
+.tracking-display {
+  letter-spacing: -0.06em;
+}
+.tracking-headline {
+  letter-spacing: -0.03em;
+}
+
+/* Subtle, on-brand focus ring for keyboard users. */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}

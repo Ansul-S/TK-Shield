@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TK-Shield — Bio-Piracy Defense</title>
+<!-- Intentionally zero external dependencies (no CDN/npm) so the UI never
+     breaks from upstream changes — matches the project's reliability goal. -->
+<style>
+  :root {
+    --bg:#0f1419; --panel:#1a2129; --line:#2b3540; --text:#e6edf3;
+    --muted:#8b97a3; --accent:#39c6a4; --accent2:#5aa9ff;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         background:var(--bg); color:var(--text); }
+  header { padding:16px 24px; border-bottom:1px solid var(--line); display:flex;
+           align-items:center; gap:12px; }
+  header h1 { font-size:18px; margin:0; }
+  header .tag { color:var(--muted); font-size:13px; }
+  #health { margin-left:auto; font-size:12px; color:var(--muted); }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; }
+  .on { background:#39c6a4; } .off { background:#6b7682; }
+  main { display:grid; grid-template-columns:330px 1fr; gap:0; height:calc(100vh - 57px); }
+  aside { border-right:1px solid var(--line); overflow-y:auto; padding:16px; }
+  section.content { overflow-y:auto; padding:24px; }
+  h2 { font-size:14px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  input, textarea, button, select { font:inherit; }
+  input, textarea { width:100%; background:var(--bg); border:1px solid var(--line);
+    color:var(--text); border-radius:6px; padding:8px 10px; margin-bottom:8px; }
+  textarea { resize:vertical; min-height:54px; }
+  button { background:var(--accent2); color:#06121f; border:none; border-radius:6px;
+    padding:9px 14px; font-weight:600; cursor:pointer; }
+  button.secondary { background:var(--panel); color:var(--text); border:1px solid var(--line); }
+  button:disabled { opacity:.5; cursor:default; }
+  .entry { padding:10px 12px; border:1px solid var(--line); border-radius:8px; margin-bottom:8px;
+    cursor:pointer; background:var(--panel); }
+  .entry:hover { border-color:var(--accent2); }
+  .entry.active { border-color:var(--accent2); box-shadow:0 0 0 1px var(--accent2); }
+  .entry .pn { font-weight:600; }
+  .entry .meta { color:var(--muted); font-size:12px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .badge { padding:4px 10px; border-radius:999px; font-weight:700; font-size:13px; }
+  .CRITICAL{background:#5b1a1a;color:#ff9a9a;} .HIGH{background:#5b3a1a;color:#ffc48a;}
+  .MEDIUM{background:#5b551a;color:#f0e58a;} .LOW{background:#1a4b3a;color:#8af0c4;}
+  .MINIMAL{background:#2b3540;color:#b7c2cd;}
+  table { width:100%; border-collapse:collapse; margin:8px 0 18px; font-size:13px; }
+  th,td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:16px 18px; margin-bottom:16px; }
+  .cite { font-size:13px; }
+  .cite a { color:var(--accent2); text-decoration:none; }
+  .src { display:inline-block; min-width:74px; color:var(--muted); }
+  .assessment h2 { color:var(--text); text-transform:none; letter-spacing:0; font-size:16px; }
+  .muted { color:var(--muted); }
+  .spin { color:var(--muted); }
+  .draft { background:var(--bg); border-left:3px solid var(--accent2); padding:12px 14px;
+    border-radius:0 6px 6px 0; white-space:pre-wrap; }
+  .err { color:#ff9a9a; }
+  #roles { display:flex; gap:6px; margin-left:20px; }
+  button.role { background:transparent; color:var(--muted); border:1px solid var(--line);
+    padding:6px 12px; font-weight:600; }
+  button.role.active { background:var(--accent2); color:#06121f; border-color:var(--accent2); }
+  section.full { height:calc(100vh - 57px); }
+  .verdict { font-size:18px; font-weight:800; padding:4px 12px; border-radius:999px; }
+  .v-high{background:#5b1a1a;color:#ff9a9a;} .v-medium{background:#5b551a;color:#f0e58a;}
+  .v-low{background:#1a4b3a;color:#8af0c4;}
+  .bar { background:var(--accent2); height:10px; border-radius:3px; display:inline-block; vertical-align:middle; }
+  .pager { display:flex; align-items:center; gap:10px; margin-top:10px; font-size:13px; }
+  .pager button { padding:4px 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🛡️ TK-Shield</h1>
+  <nav id="roles">
+    <button class="role active" data-role="defender" onclick="setRole('defender')">🛡️ Defender</button>
+    <button class="role" data-role="examiner" onclick="setRole('examiner')">⚖️ Examiner</button>
+    <button class="role" data-role="researcher" onclick="setRole('researcher')">📊 Researcher</button>
+  </nav>
+  <span id="health"></span>
+</header>
+<main id="view-defender">
+  <aside>
+    <h2>Documented TK</h2>
+    <input id="tk_search" placeholder="🔍 Search practice, plant, country…" oninput="onSearch()" />
+    <div id="entries"><span class="spin">Loading…</span></div>
+    <div id="tk_pager" class="pager"></div>
+    <h2 style="margin-top:24px">Add entry</h2>
+    <input id="f_name" placeholder="Practice name (e.g. Turmeric for wound healing)" />
+    <textarea id="f_desc" placeholder="Description / folk usage"></textarea>
+    <div class="row" style="margin:0">
+      <input id="f_country" placeholder="Country (e.g. IN)" style="flex:1" />
+      <input id="f_date" placeholder="Documented (YYYY-MM-DD)" style="flex:1.4" />
+    </div>
+    <input id="f_community" placeholder="Community" />
+    <button onclick="addEntry()">+ Register & auto-extract</button>
+    <div id="addmsg" class="muted" style="font-size:12px;margin-top:6px"></div>
+  </aside>
+
+  <section class="content">
+    <div id="welcome" class="muted">
+      <p>Select a documented TK entry, or register one, then run a defensive check.</p>
+      <p>TK-Shield finds patents that may misappropriate the knowledge, scores bio-piracy
+         risk across five factors, gathers prior-art evidence (PubMed, Wikidata, GBIF),
+         and drafts a citation-backed opposition.</p>
+    </div>
+    <div id="panel" style="display:none">
+      <div class="row">
+        <span id="selname" style="font-size:18px;font-weight:600"></span>
+      </div>
+      <div class="row">
+        <button onclick="runAnalyze()">⚡ Quick risk check</button>
+        <button class="secondary" onclick="runReport()">📄 Full RAG report</button>
+        <button class="secondary" onclick="runMonitor()">🔭 Live patent monitor</button>
+        <button class="secondary" onclick="openMarkdown()">⬇ Export markdown</button>
+      </div>
+      <div id="out"></div>
+    </div>
+  </section>
+</main>
+
+<!-- Examiner: reverse novelty check against the TK registry -->
+<section class="content full" id="view-examiner" style="display:none">
+  <h2>Examiner — patent novelty vs documented TK</h2>
+  <p class="muted">Paste a patent's text (or claim/abstract). TK-Shield searches the
+     documented Traditional-Knowledge registry for prior art and judges novelty.</p>
+  <textarea id="ex_text" style="min-height:120px" placeholder="Paste patent title + abstract / claim text here…"></textarea>
+  <div class="row"><button onclick="runNovelty()">⚖️ Check novelty</button></div>
+  <div id="ex_out"></div>
+</section>
+
+<!-- Researcher: corpus + registry statistics -->
+<section class="content full" id="view-researcher" style="display:none">
+  <h2>Researcher — corpus & registry analytics</h2>
+  <div class="row"><button onclick="loadStats()">📊 Refresh stats</button></div>
+  <div id="rs_out"><span class="spin">Loading…</span></div>
+</section>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let entries = [];
+let selected = null;   // selected entry object
+let lastReq = null;    // last analyze/report request body
+
+// --- tiny markdown renderer (headings, bold, lists, paragraphs) ---
+function md(src){
+  const esc = (s)=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return esc(src).split(/\n{2,}/).map(block=>{
+    const t = block.trim();
+    if(/^##\s/.test(t)) return '<h2>'+t.replace(/^##\s/,'')+'</h2>';
+    if(/^#\s/.test(t))  return '<h2>'+t.replace(/^#\s/,'')+'</h2>';
+    if(/^[-*]\s/m.test(t)) return '<ul>'+t.split('\n').map(l=>'<li>'+l.replace(/^[-*]\s/,'')+'</li>').join('')+'</ul>';
+    return '<p>'+t.replace(/\n/g,'<br>')+'</p>';
+  }).join('').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+}
+
+// ---- display helpers (clean up raw data for presentation) ----
+function dash(v){
+  if (v === undefined || v === null) return '—';
+  const s = String(v).trim();
+  return (s === '' || s.toLowerCase() === 'nan' || s.toLowerCase() === 'none') ? '—' : s;
+}
+function cap(s){ s = String(s||''); return s ? s.charAt(0).toUpperCase()+s.slice(1) : s; }
+function trunc(s, n){ s = String(s||'').trim(); return s.length > n ? s.slice(0, n).trim()+'…' : s; }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function api(path, opts){
+  const r = await fetch(path, opts);
+  if(!r.ok){ const e = await r.json().catch(()=>({detail:r.statusText})); throw new Error(e.detail||r.statusText); }
+  return r.json();
+}
+
+async function loadHealth(){
+  try{
+    const h = await api('/api/health');
+    $('health').innerHTML =
+      `<span class="dot ${h.llm_available?'on':'off'}"></span>LLM `+
+      `<span class="dot ${h.live_patents_available?'on':'off'}" style="margin-left:10px"></span>Live patents`;
+  }catch(e){ $('health').textContent = 'API offline'; }
+}
+
+let tkQuery = '', tkOffset = 0, tkTotal = 0, searchTimer = null;
+const TK_PAGE = 25;
+
+async function loadEntries(){
+  const url = `/api/tk?q=${encodeURIComponent(tkQuery)}&limit=${TK_PAGE}&offset=${tkOffset}`;
+  const data = await api(url);
+  entries = data.items; tkTotal = data.total;
+  const box = $('entries');
+  box.innerHTML = entries.length ? '' :
+    `<span class="muted" style="font-size:13px">${tkQuery ? 'No matches.' : 'No entries yet.'}</span>`;
+  entries.forEach(e=>{
+    const d = document.createElement('div');
+    d.className = 'entry' + (selected && selected.tk_id===e.tk_id ? ' active':'');
+    d.innerHTML = `<div class="pn">${esc(e.practice_name)}</div>
+      <div class="meta">${esc(e.tk_id)} · ${esc(dash(e.country))} · ${esc((e.plants||[]).join(', ')||'no plants')}</div>`;
+    d.onclick = ()=>select(e);
+    box.appendChild(d);
+  });
+  renderPager();
+}
+
+function renderPager(){
+  const p = $('tk_pager');
+  if (tkTotal <= TK_PAGE){
+    p.innerHTML = tkTotal ? `<span class="muted">${tkTotal} entr${tkTotal===1?'y':'ies'}</span>` : '';
+    return;
+  }
+  const from = tkOffset+1, to = Math.min(tkOffset+TK_PAGE, tkTotal);
+  p.innerHTML =
+    `<button class="secondary" ${tkOffset===0?'disabled':''} onclick="pageTk(-1)">‹ Prev</button>
+     <span class="muted">${from}–${to} of ${tkTotal}</span>
+     <button class="secondary" ${to>=tkTotal?'disabled':''} onclick="pageTk(1)">Next ›</button>`;
+}
+
+function pageTk(dir){ tkOffset = Math.max(0, tkOffset + dir*TK_PAGE); loadEntries(); }
+
+function onSearch(){
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(()=>{ tkQuery = $('tk_search').value.trim(); tkOffset = 0; loadEntries(); }, 250);
+}
+
+function select(e){
+  selected = e;
+  $('welcome').style.display='none';
+  $('panel').style.display='';
+  $('selname').textContent = e.practice_name;
+  $('out').innerHTML = '<span class="muted">Choose an action above.</span>';
+  loadEntries();
+}
+
+async function addEntry(){
+  const body = {
+    practice_name: $('f_name').value.trim(),
+    description: $('f_desc').value.trim(),
+    country: $('f_country').value.trim(),
+    documentation_date: $('f_date').value.trim(),
+    community: $('f_community').value.trim(),
+  };
+  if(!body.practice_name){ $('addmsg').innerHTML='<span class="err">Practice name required.</span>'; return; }
+  $('addmsg').textContent = 'Registering…';
+  try{
+    const e = await api('/api/tk', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    $('addmsg').textContent = `Added ${e.tk_id} · plants: ${(e.plants||[]).join(', ')||'—'}`;
+    ['f_name','f_desc','f_country','f_date','f_community'].forEach(i=>$(i).value='');
+    tkQuery = ''; tkOffset = 0; $('tk_search').value = '';   // surface the new entry
+    await loadEntries();
+    select(e);
+  }catch(err){ $('addmsg').innerHTML = '<span class="err">'+err.message+'</span>'; }
+}
+
+function reqBody(){ return { tk_id: selected.tk_id, n_results: 5 }; }
+
+function riskCard(risk){
+  const rows = Object.entries(risk.factors).map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+  const recs = (risk.recommendations||[]).map(r=>`<li>${r}</li>`).join('');
+  return `<div class="card">
+    <div class="row" style="align-items:center;margin-bottom:8px">
+      <span class="badge ${risk.risk_level}">${risk.risk_level}</span>
+      <span style="font-size:20px;font-weight:700">${risk.total_score}<span class="muted">/100</span></span>
+    </div>
+    <table><tr><th>Risk factor</th><th>Points</th></tr>${rows}</table>
+    ${recs?`<strong>Recommended actions</strong><ul>${recs}</ul>`:''}
+  </div>`;
+}
+
+function patentsTable(patents){
+  if(!patents.length) return '<div class="card muted">No candidate patents found.</div>';
+  const rows = patents.map(p=>`<tr>
+    <td>${esc(p.patent_id||'')}</td><td>${esc(cap(trunc(p.title, 70)))}</td>
+    <td>${esc(dash(p.assignee))}</td><td>${esc(dash(p.filing_date))}</td><td>${dash(p.similarity)}</td></tr>`).join('');
+  return `<div class="card"><h2>Closest patents</h2><table>
+    <tr><th>Patent</th><th>Title</th><th>Assignee</th><th>Filed</th><th>Sim</th></tr>${rows}</table></div>`;
+}
+
+async function runAnalyze(){
+  $('out').innerHTML = '<span class="spin">Running hybrid search + risk scoring…</span>';
+  try{
+    const j = await api('/api/analyze', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(reqBody())});
+    $('out').innerHTML = riskCard(j.risk) + patentsTable(j.patents);
+  }catch(e){ $('out').innerHTML = '<span class="err">'+e.message+'</span>'; }
+}
+
+async function runReport(){
+  $('out').innerHTML = '<span class="spin">Retrieving, scoring, gathering prior art & generating report… (LLM may take ~30s)</span>';
+  try{
+    const j = await api('/api/report', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(reqBody())});
+    const cites = (j.citations||[]).map(c=>
+      `<div class="cite"><span class="src">${c.source}</span> <a href="${c.url}" target="_blank">${c.ref_id}</a> — ${c.title||''}</div>`).join('') || '<span class="muted">none on record</span>';
+    const skipped = (j.sources_skipped||[]).length ? `<div class="muted" style="font-size:12px">⚠️ Sources unavailable: ${j.sources_skipped.join(', ')}</div>`:'';
+    const llm = j.llm_used ? '' : '<div class="muted" style="font-size:12px">ℹ️ Narrative generated offline (LLM unavailable); figures & citations are exact.</div>';
+    $('out').innerHTML =
+      riskCard(j.risk) +
+      `<div class="card assessment">${md(j.assessment||'')}${llm}</div>` +
+      patentsTable(j.top_patents) +
+      `<div class="card"><h2>Prior-art citations</h2>${cites}${skipped}</div>` +
+      `<div class="card"><h2>Draft opposition / defensive publication</h2><div class="draft">${j.opposition_draft||''}</div></div>`;
+  }catch(e){ $('out').innerHTML = '<span class="err">'+e.message+'</span>'; }
+}
+
+async function runMonitor(){
+  $('out').innerHTML = '<span class="spin">Checking live patents…</span>';
+  try{
+    const j = await api('/api/monitor', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tk_id:selected.tk_id, n_results:10})});
+    const pats = (j.patents||[]).map(p=>`<tr><td>${esc(p.id)}</td><td>${esc(cap(trunc(p.metadata.title,70)))}</td><td>${esc(dash(p.metadata.filing_date))}</td></tr>`).join('');
+    $('out').innerHTML = `<div class="card">
+      <h2>Live patent monitor</h2>
+      <p class="${j.available?'':'muted'}">${j.note}</p>
+      ${pats?`<table><tr><th>Patent</th><th>Title</th><th>Date</th></tr>${pats}</table>`:''}
+    </div>`;
+  }catch(e){ $('out').innerHTML = '<span class="err">'+e.message+'</span>'; }
+}
+
+function openMarkdown(){
+  const f = document.createElement('form');
+  f.method='POST'; f.action='/api/report?format=markdown'; f.target='_blank';
+  // form posts can't send JSON easily; use fetch + blob instead
+  fetch('/api/report?format=markdown', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(reqBody())})
+    .then(r=>r.text()).then(t=>{
+      const w = window.open('', '_blank'); w.document.write('<pre>'+t.replace(/</g,'&lt;')+'</pre>');
+    });
+}
+
+// ---------------- role switching ----------------
+let statsLoaded = false;
+function setRole(role){
+  for (const v of ['defender','examiner','researcher']) {
+    document.getElementById('view-'+v).style.display = (v===role) ? '' : 'none';
+  }
+  document.querySelectorAll('button.role').forEach(b =>
+    b.classList.toggle('active', b.dataset.role===role));
+  if (role==='researcher' && !statsLoaded) loadStats();
+}
+
+// ---------------- examiner: novelty ----------------
+async function runNovelty(){
+  const text = document.getElementById('ex_text').value.trim();
+  if(!text){ document.getElementById('ex_out').innerHTML='<span class="err">Paste some patent text first.</span>'; return; }
+  document.getElementById('ex_out').innerHTML = '<span class="spin">Searching TK registry for prior art…</span>';
+  try{
+    const j = await api('/api/novelty', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({patent_text:text, n_results:5})});
+    const vclass = j.confidence==='high'?'v-high':(j.confidence==='medium'?'v-medium':'v-low');
+    const rows = (j.matches||[]).map(m=>`<tr><td>${m.tk_id||''}</td><td>${m.practice_name||''}</td><td>${m.domain||''}</td><td>${m.similarity}</td></tr>`).join('');
+    document.getElementById('ex_out').innerHTML =
+      `<div class="card"><span class="verdict ${vclass}">${j.verdict}</span>
+        <span class="muted" style="margin-left:10px">top similarity ${j.top_similarity}</span></div>
+       <div class="card assessment">${md(j.assessment||'')}${j.llm_used?'':'<div class="muted" style="font-size:12px">ℹ️ Offline narrative; similarity exact.</div>'}</div>
+       ${rows?`<div class="card"><h2>Matching TK prior art</h2><table><tr><th>TK id</th><th>Practice</th><th>Domain</th><th>Sim</th></tr>${rows}</table></div>`:'<div class="card muted">No TK prior art matched.</div>'}`;
+  }catch(e){ document.getElementById('ex_out').innerHTML = '<span class="err">'+e.message+'</span>'; }
+}
+
+// ---------------- researcher: stats ----------------
+function distBars(obj){
+  const entries = Object.entries(obj||{}); if(!entries.length) return '<span class="muted">none</span>';
+  const max = Math.max(...entries.map(([,v])=>v), 1);
+  return entries.sort((a,b)=>b[1]-a[1]).map(([k,v])=>
+    `<div style="display:flex;align-items:center;gap:8px;margin:4px 0">
+       <span style="flex:0 0 190px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(k)}">${esc(k)}</span>
+       <span class="bar" style="width:${Math.max(6, Math.round(180*v/max))}px"></span>
+       <span class="muted">${v}</span></div>`).join('');
+}
+async function loadStats(){
+  statsLoaded = true;
+  document.getElementById('rs_out').innerHTML = '<span class="spin">Loading…</span>';
+  try{
+    const j = await api('/api/stats');
+    const topC = (j.registry.top_countries||[]).map(([c,n])=>`${c}: ${n}`).join(' · ') || '—';
+    const topA = (j.patents.top_assignees||[]).map(([a,n])=>`<tr><td>${a}</td><td>${n}</td></tr>`).join('');
+    document.getElementById('rs_out').innerHTML =
+      `<div class="card"><h2>TK registry — ${j.registry.total} entries</h2>
+        <strong>By domain</strong>${distBars(j.registry.by_domain)}
+        <div style="margin-top:8px"><strong>Top origin countries:</strong> <span class="muted">${topC}</span></div></div>
+       <div class="card"><h2>Patent corpus — ${j.patents.total} indexed <span class="muted">(sampled ${j.patents.sampled})</span></h2>
+        <strong>By domain</strong>${distBars(j.patents.by_domain)}
+        <div style="margin-top:8px"><strong>By source</strong>${distBars(j.patents.by_source)}</div>
+        ${topA?`<div style="margin-top:8px"><strong>Top assignees</strong><table><tr><th>Assignee</th><th>#</th></tr>${topA}</table></div>`:''}</div>`;
+  }catch(e){ document.getElementById('rs_out').innerHTML = '<span class="err">'+e.message+'</span>'; }
+}
+
+loadHealth(); loadEntries();
+setInterval(loadHealth, 15000);
+</script>
+</body>
+</html>
