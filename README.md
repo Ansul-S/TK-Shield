@@ -71,16 +71,6 @@ flowchart LR
 - **Keyless** end-to-end · **offline-first** · **no runtime CDN** · local LLM optional
 - Backend: **48** network-free tests · Frontend: **21** tests (incl. XSS-safety regressions)
 
-## Screenshots
-
-| Defender — risk result | Examiner — novelty verdict |
-|---|---|
-| ![Defender risk result](docs/screenshots/defender.png) | ![Examiner novelty verdict](docs/screenshots/examiner.png) |
-| **Researcher — analytics** | **Landing** |
-| ![Researcher analytics](docs/screenshots/researcher.png) | ![Landing](docs/screenshots/landing.png) |
-
-> Capture instructions in [docs/screenshots/README.md](docs/screenshots/README.md).
-
 ---
 
 ## Design principles (non-negotiable)
@@ -124,17 +114,12 @@ For live development with hot-reload, run the backend with `--reload` and `npm -
 **Backend** FastAPI · ChromaDB (vector search) · in-memory BM25 · SQLite (registry) · sentence-transformers · spaCy NER · resilient `httpx` clients · Ollama (local LLM) ·
 **Frontend** Vite + React 18 + TypeScript · TanStack Query · Tailwind v4 · Radix · Vitest.
 
-See **[CLAUDE.md](CLAUDE.md)** for full architecture, and **[docs/evaluation_report.md](docs/evaluation_report.md)** for the latest evaluation.
-
 ## Tests
 
 ```bash
 PYTHONPATH=. pytest tests/ -q          # backend — network-free, fixture-based
 npm --prefix frontend run test         # frontend — Vitest (incl. XSS-safety)
 ```
-
-See **[VERIFICATION.md](VERIFICATION.md)** for reproducible evidence (commands + observed output) behind every
-claim here, and a ~2-minute keyless demo path.
 
 ## Limitations
 
@@ -163,17 +148,12 @@ Designed and directed by **Ansul Suryawanshi** as an AI-assisted engineering pro
 environmental-science background to the defensive protection of traditional knowledge. The architecture,
 data-source, evaluation, security, and product decisions are mine — keyless / offline-first design, hybrid
 retrieval over pure embeddings, an interpretable risk model, the three-persona structure, the community-
-attribution feature, and the WIPO policy framing — and the system is verified end-to-end (see
-[VERIFICATION.md](VERIFICATION.md)). Implementation was accelerated with an AI coding assistant under my
-direction and review.
+attribution feature, and the WIPO policy framing — and the system is verified end-to-end. Implementation was
+accelerated with an AI coding assistant under my direction and review.
 
 ## Documentation
 
-- **[CLAUDE.md](CLAUDE.md)** — full architecture and setup-from-scratch
-- **[VERIFICATION.md](VERIFICATION.md)** — reproducible evidence for every claim
-- **[docs/evaluation_report.md](docs/evaluation_report.md)** — latest evaluation results
-- **[docs/TK-Shield-Whitepaper.pdf](docs/TK-Shield-Whitepaper.pdf)** — project brief (PDF)
-- **[docs/INTERVIEW_PREP.md](docs/INTERVIEW_PREP.md)** — Q&A about the project
+- **[Project brief (PDF)](docs/TK-Shield-Whitepaper.pdf)** — problem, method, evaluation results, and WIPO policy alignment.
 
 ---
 
