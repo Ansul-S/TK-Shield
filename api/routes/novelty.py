@@ -2,9 +2,10 @@
 # the documented TK registry (reverse lookup).
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from api.deps import get_llm_client
+from api.schemas import MAX_PATENT_TEXT, MAX_SHORT, NResults
 from src.clients import patentsview_client
 from src.rag import novelty
 
@@ -12,9 +13,10 @@ router = APIRouter(prefix="/api/novelty", tags=["examiner"])
 
 
 class NoveltyIn(BaseModel):
-    patent_text: str = ""
-    patent_id: str | None = None  # optional: fetch text live (needs free key)
-    n_results: int = 5
+    patent_text: str = Field("", max_length=MAX_PATENT_TEXT)
+    # optional: fetch text live (needs free key)
+    patent_id: str | None = Field(None, max_length=MAX_SHORT)
+    n_results: NResults = 5
 
 
 @router.post("")

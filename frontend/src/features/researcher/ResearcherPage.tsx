@@ -1,4 +1,4 @@
-import { BarChart3, Building2, FileStack, Globe2, Library } from "lucide-react";
+import { BarChart3, Building2, FileStack, Globe2, Library, Users } from "lucide-react";
 import { useStats } from "@/api/hooks";
 import { Card } from "@/components/Card";
 import { SectionHeader } from "@/components/SectionHeader";
@@ -72,6 +72,15 @@ function Loaded({ data }: { data: NonNullable<ReturnType<typeof useStats>["data"
             </p>
             <DistributionBars data={data.registry.top_countries} />
           </div>
+          {data.registry.top_communities.length > 0 && (
+            <div className="mt-4">
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-tertiary">
+                <Users className="h-3.5 w-3.5" strokeWidth={1.75} /> Documented
+                communities &amp; peoples
+              </p>
+              <DistributionBars data={data.registry.top_communities} />
+            </div>
+          )}
         </Card>
 
         <Card>

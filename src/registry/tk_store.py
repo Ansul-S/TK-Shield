@@ -33,8 +33,14 @@ _COLUMNS = (
 
 def _connect() -> sqlite3.Connection:
     Path(config.TK_DB_PATH).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(config.TK_DB_PATH)
+    conn = sqlite3.connect(config.TK_DB_PATH, timeout=5.0)
     conn.row_factory = sqlite3.Row
+    # Sync route handlers run concurrently in Starlette's threadpool, and bulk
+    # imports write thousands of rows. WAL lets reads proceed during a write and
+    # busy_timeout makes a contended connection wait instead of immediately
+    # raising "database is locked" (C1). Both are idempotent per-connect.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 
@@ -189,9 +195,13 @@ def _search_clause(query: str | None) -> tuple[str, list]:
     """Build a WHERE clause + params for a free-text search across key fields."""
     if not query:
         return "", []
-    like = f"%{query.strip()}%"
+    # Escape LIKE metacharacters so a literal % or _ in the user's query matches
+    # itself instead of acting as a wildcard (D2). Backslash is the escape char,
+    # so escape it first. Values are still passed as bound params (no injection).
+    term = query.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    like = f"%{term}%"
     cols = ("practice_name", "description", "plants", "aliases", "country", "community")
-    clause = " WHERE " + " OR ".join(f"{c} LIKE ?" for c in cols)
+    clause = " WHERE " + " OR ".join(f"{c} LIKE ? ESCAPE '\\'" for c in cols)
     return clause, [like] * len(cols)
 
 
@@ -204,7 +214,10 @@ def list_entries(limit: int | None = None, offset: int = 0,
     """
     init_db()
     clause, params = _search_clause(query)
-    sql = f"SELECT * FROM tk_entries{clause} ORDER BY created_at DESC"
+    # created_at alone is not unique: register_bulk stamps near-identical
+    # timestamps in a tight loop, so offset pagination over equal keys can
+    # repeat or skip rows. tk_id is the PRIMARY KEY → a stable tiebreaker (D1).
+    sql = f"SELECT * FROM tk_entries{clause} ORDER BY created_at DESC, tk_id"
     if limit is not None:
         sql += " LIMIT ? OFFSET ?"
         params = params + [limit, offset]
