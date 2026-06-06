@@ -1,0 +1,77 @@
+{
+  "summary": {
+    "cases": 3,
+    "precision_at_1": 0.667,
+    "precision_at_5": 1.0,
+    "mrr": 0.833,
+    "flagged_high_or_critical": 1.0,
+    "n_results": 10,
+    "corpus_size": 16371,
+    "generated_at": "2026-06-06T10:14:12+00:00"
+  },
+  "results": [
+    {
+      "case": "Turmeric (Curcuma longa) for wound healing",
+      "expected_patent": "US5401504A",
+      "claimant": "University of Mississippi Medical Center (US)",
+      "outcome": "Revoked by the USPTO in 1997 on documented Indian prior art.",
+      "rank": 1,
+      "top1": true,
+      "top5": true,
+      "similarity": 0.823,
+      "risk_level": "CRITICAL",
+      "risk_score": 85,
+      "factors": {
+        "similarity_score": 33,
+        "temporal_risk": 20,
+        "geographic_risk": 15,
+        "assignee_risk": 7,
+        "ipc_risk": 10
+      },
+      "flagged": true,
+      "top_hit": "US5401504A"
+    },
+    {
+      "case": "Neem (Azadirachta indica) as a crop antifungal",
+      "expected_patent": "EP0436257B1",
+      "claimant": "W.R. Grace & Co. / USDA (US)",
+      "outcome": "Revoked by the EPO in 2000/2005 on documented Indian prior art.",
+      "rank": 1,
+      "top1": true,
+      "top5": true,
+      "similarity": 0.787,
+      "risk_level": "CRITICAL",
+      "risk_score": 83,
+      "factors": {
+        "similarity_score": 30,
+        "temporal_risk": 20,
+        "geographic_risk": 15,
+        "assignee_risk": 15,
+        "ipc_risk": 3
+      },
+      "flagged": true,
+      "top_hit": "EP0436257B1"
+    },
+    {
+      "case": "Basmati aromatic rice of the Indian subcontinent",
+      "expected_patent": "US5663484A",
+      "claimant": "RiceTec Inc. (US)",
+      "outcome": "Most claims withdrawn/struck at the USPTO in 2001-2002.",
+      "rank": 2,
+      "top1": false,
+      "top5": true,
+      "similarity": 0.606,
+      "risk_level": "CRITICAL",
+      "risk_score": 83,
+      "factors": {
+        "similarity_score": 23,
+        "temporal_risk": 20,
+        "geographic_risk": 15,
+        "assignee_risk": 15,
+        "ipc_risk": 10
+      },
+      "flagged": true,
+      "top_hit": "US5663484"
+    }
+  ]
+}

@@ -3,6 +3,7 @@ import * as Tooltip from "@radix-ui/react-tooltip";
 import { ShieldCheck } from "lucide-react";
 import { useHealth } from "@/api/hooks";
 import { StatusDot } from "@/components/StatusDot";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ROLES } from "./roles";
 import { cn } from "@/lib/cn";
 
@@ -11,7 +12,8 @@ import { cn } from "@/lib/cn";
 // that scrolls away over the hero image, matching the Duna reference; on every
 // other route it's the standard solid, dense enterprise bar.
 export function AppShell() {
-  const isLanding = useLocation().pathname === "/";
+  const pathname = useLocation().pathname;
+  const isLanding = pathname === "/";
   const header = <Header overlay={isLanding} />;
 
   return (
@@ -20,7 +22,10 @@ export function AppShell() {
         {!isLanding && header}
         <main className="min-h-0 flex-1 overflow-y-auto">
           {isLanding && header}
-          <Outlet />
+          {/* keyed by route so navigating away clears a caught error */}
+          <ErrorBoundary key={pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </Tooltip.Provider>

@@ -3,6 +3,7 @@
 # Run:  venv/bin/uvicorn api.main:app --reload
 # Then open http://localhost:8000
 
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from loguru import logger
 
 from api.routes import analyze, monitor, novelty, report, stats, tk
 from src.registry import tk_store
@@ -18,7 +20,26 @@ from src.registry import tk_store
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     tk_store.init_db()
+    _warm_engine()
     yield
+
+
+def _warm_engine() -> None:
+    """Build the hybrid engine (and warm the embedding model + ChromaDB) at
+    startup instead of lazily on the first /analyze. This fixes the cold-start
+    latency a user would otherwise hit (C4 readiness) and the race where
+    concurrent first requests build the ~16k-doc BM25 index more than once
+    (C2 thread-safety). Failures degrade gracefully — the server still serves
+    the SPA and /api/health; the affected route reports the real error."""
+    from api.deps import get_engine
+    t0 = time.perf_counter()
+    try:
+        engine = get_engine()
+        engine.search("traditional medicinal plant extract", n_results=1)  # warm embeddings + Chroma
+        logger.success(f"Search engine warmed in {time.perf_counter() - t0:.1f}s")
+    except Exception as e:  # noqa: BLE001 — never let warmup crash startup
+        logger.warning(f"Engine warmup skipped ({type(e).__name__}: {e}); "
+                       "first /analyze will build it lazily.")
 
 
 app = FastAPI(

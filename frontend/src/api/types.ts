@@ -164,6 +164,7 @@ export interface Stats {
     total: number;
     by_domain: Record<string, number>;
     top_countries: [string, number][];
+    top_communities: [string, number][];
   };
   patents: {
     total: number;

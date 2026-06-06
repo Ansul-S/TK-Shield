@@ -10,6 +10,7 @@
 # Column names vary across releases, so detection is fuzzy/case-insensitive.
 
 import io
+import re
 import zipfile
 from collections import defaultdict
 from pathlib import Path
@@ -21,6 +22,27 @@ from loguru import logger
 
 from src.classifier.domain import infer_domain
 from src.utils.config import config
+
+DUKE_PROVENANCE = "Documented ethnobotany (Dr. Duke, USDA)"
+
+
+def split_geo(raw) -> tuple[str, str]:
+    """Split a Duke geographic label into (country, community/people).
+
+    Duke encodes the documented holder group inside the country cell and tags
+    some labels with a footnote asterisk, e.g. 'INDIA(SANTAL)' -> ('INDIA',
+    'Santal'), 'JAPAN*' -> ('JAPAN', ''), 'US(AMERINDIAN)' -> ('US',
+    'Amerindian'). Plain labels pass through unchanged. Surfacing the people /
+    community is the attribution the Nagoya Protocol and WIPO IGC center on.
+    """
+    s = str(raw or "").strip()
+    if s.lower() in ("nan", "none", ""):
+        return "", ""
+    s = s.rstrip("*").strip()
+    m = re.search(r"\(([^)]+)\)\s*$", s)
+    if m:
+        return s[: m.start()].strip(), m.group(1).strip().title()
+    return s, ""
 
 
 def _find_col(columns, *needles) -> str | None:
@@ -96,11 +118,14 @@ def entries_from_dataframe(df: pd.DataFrame, limit: int) -> list[dict]:
         cname = cname_by_taxon.get(taxon, "")
         name = cname or taxon                       # never "nan"
         desc = f"Documented traditional/ethnobotanical uses of {taxon}: " + ", ".join(use_list) + "."
+        # Duke buries the holder community in the country cell (e.g. INDIA(SANTAL));
+        # split it out so country consolidates and the community is attributed.
+        country, people = split_geo(country_by_taxon.get(taxon, ""))
         entries.append({
             "practice_name": f"{name} — traditional uses",
             "description": desc,
-            "community": "Documented ethnobotany (Dr. Duke, USDA)",
-            "country": country_by_taxon.get(taxon, ""),   # full name; not truncated to garbage
+            "community": people or DUKE_PROVENANCE,
+            "country": country,                           # holder community split out
             "documentation_date": "",
             "category": "ethnobotanical",
             "domain": infer_domain(desc),

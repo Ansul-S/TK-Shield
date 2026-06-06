@@ -21,6 +21,34 @@ def test_pagination(monkeypatch, tmp_path):
     assert len(tk_store.list_entries()) == 30  # no limit → all (used by stats)
 
 
+def test_pagination_stable_with_equal_timestamps(monkeypatch, tmp_path):
+    """D1: bulk imports stamp near-identical created_at; paging must not repeat
+    or skip rows. Walking every page should yield each tk_id exactly once."""
+    _isolate(monkeypatch, tmp_path)
+    tk_store.register_bulk(
+        [{"practice_name": f"Plant {i:02d} remedy", "plants": [f"p{i}"]} for i in range(30)]
+    )
+    seen, offset = [], 0
+    while True:
+        page = tk_store.list_entries(limit=7, offset=offset)
+        if not page:
+            break
+        seen.extend(e["tk_id"] for e in page)
+        offset += 7
+    assert len(seen) == 30
+    assert len(set(seen)) == 30  # no repeats, no skips across page boundaries
+
+
+def test_search_escapes_like_wildcards(monkeypatch, tmp_path):
+    """D2: a literal % in the query must match the literal %, not act as a
+    wildcard that returns every row."""
+    _isolate(monkeypatch, tmp_path)
+    tk_store.add_entry({"practice_name": "Turmeric for wounds"})
+    tk_store.add_entry({"practice_name": "100% neem extract"})
+    assert tk_store.count_entries(query="%") == 1  # only the entry containing "%"
+    assert tk_store.count_entries(query="100%") == 1
+
+
 def test_search(monkeypatch, tmp_path):
     _isolate(monkeypatch, tmp_path)
     tk_store.add_entry({"practice_name": "Turmeric for wounds", "plants": ["turmeric", "Curcuma longa"]})

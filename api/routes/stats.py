@@ -21,6 +21,13 @@ def stats() -> dict:
     entries = tk_store.list_entries()
     tk_by_domain = Counter((e.get("domain") or "unknown") for e in entries)
     tk_by_country = Counter((e.get("country") or "—") for e in entries)
+    # Documented holder communities/peoples (Nagoya/WIPO-IGC attribution). Drop
+    # the generic Duke provenance placeholder and empties so only real groups show.
+    tk_by_community = Counter(
+        c for e in entries
+        if (c := (e.get("community") or "").strip())
+        and c != "Documented ethnobotany (Dr. Duke, USDA)"
+    )
 
     # --- Patent corpus (from ChromaDB) ---
     patent_total = 0
@@ -47,6 +54,7 @@ def stats() -> dict:
             "total": len(entries),
             "by_domain": dict(tk_by_domain),
             "top_countries": tk_by_country.most_common(10),
+            "top_communities": tk_by_community.most_common(10),
         },
         "patents": {
             "total": patent_total,

@@ -126,12 +126,26 @@ venv/bin/uvicorn api.main:app               # serves SPA + /api at http://localh
 ### 7. Tests
 
 ```bash
-venv/bin/pytest tests/ -q                       # 37 tests, network-free (fixtures/mocks)
+venv/bin/pytest tests/ -q                       # 48 tests, network-free (fixtures/mocks)
 venv/bin/pytest tests/test_registry.py -q       # a single file
 venv/bin/pytest tests/test_novelty.py::test_uses_llm_when_available -q   # a single test
+npm --prefix frontend run test                  # 21 frontend tests (Vitest; incl. XSS-safety)
 ```
 
+`tests/test_landmark_eval.py` needs the built corpus and is auto-skipped if absent.
+
 > **Module imports, not file paths.** Everything uses absolute `src.*` / `api.*` imports rooted at the repo root — run modules with `python -m src.x.y`, never as file paths. Each `src/` module keeps a `__main__` smoke block.
+
+### 7a. Evaluation & project docs
+
+```bash
+PYTHONPATH=. venv/bin/python -m src.evaluation.landmark_eval   # → docs/evaluation_report.{md,json}
+PYTHONPATH=. venv/bin/python docs/build_whitepaper.py          # → docs/TK-Shield-Whitepaper.pdf
+```
+
+- **`src/evaluation/landmark_eval.py`** — quantitative eval: submits independently-worded TK descriptions for the 3 landmark cases through the full pipeline and reports Precision@1/@5, MRR, and HIGH/CRITICAL rate. The headline credibility result (P@5 100%, all CRITICAL).
+- **`docs/build_whitepaper.py`** — renders the project brief PDF from the eval JSON (reportlab), so the brief never drifts from measured numbers.
+- **`src/ingestion/migrate_community_attribution.py`** — idempotent migration that splits Duke's `COUNTRY(PEOPLE)` labels into a clean country + a `community` field (Nagoya/WIPO-IGC attribution); surfaced in `/api/stats` `top_communities` and the Researcher view.
 
 ---
 
@@ -194,7 +208,7 @@ venv/bin/pytest tests/test_novelty.py::test_uses_llm_when_available -q   # a sin
 
 ## Verification (end-to-end)
 
-1. `venv/bin/pytest tests/ -q` → 37 green (no network).
+1. `venv/bin/pytest tests/ -q` → 48 green (no network); `npm --prefix frontend run test` → 21 green.
 2. `curl -s localhost:8000/api/health` → `{"status":"ok","llm_available":...,"live_patents_available":false}`.
 3. Defender: register/select **turmeric** → quick risk check → **HIGH**; with the bulk corpus the closest patents are real US turmeric patents (US5401504, Univ. of Mississippi, real dates).
 4. Examiner: paste a neem-oil patent abstract → **LIKELY NOT NOVEL** with matching TK prior art.

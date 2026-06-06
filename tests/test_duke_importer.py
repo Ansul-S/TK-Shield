@@ -21,6 +21,28 @@ def test_aggregates_uses_per_taxon():
     assert turmeric["country"] == "India"   # full country name, not truncated
 
 
+def test_split_geo_extracts_community_and_strips_artifacts():
+    assert duke.split_geo("INDIA(SANTAL)") == ("INDIA", "Santal")
+    assert duke.split_geo("US(AMERINDIAN)") == ("US", "Amerindian")
+    assert duke.split_geo("JAPAN*") == ("JAPAN", "")
+    assert duke.split_geo("CHINA") == ("CHINA", "")
+    assert duke.split_geo(None) == ("", "")
+    assert duke.split_geo("nan") == ("", "")
+
+
+def test_country_parenthetical_becomes_community():
+    # INDIA(SANTAL) must consolidate the country to INDIA and attribute Santal.
+    df = pd.DataFrame({
+        "TAXON": ["Curcuma longa"],
+        "CNAME": ["Turmeric"],
+        "ACTIVITY": ["Wound"],
+        "COUNTRY": ["INDIA(SANTAL)"],
+    })
+    e = duke.entries_from_dataframe(df, limit=10)[0]
+    assert e["country"] == "INDIA"
+    assert e["community"] == "Santal"
+
+
 def test_handles_missing_columns_gracefully():
     df = pd.DataFrame({"foo": [1], "bar": [2]})
     assert duke.entries_from_dataframe(df, limit=10) == []
