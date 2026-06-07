@@ -15,21 +15,25 @@ export function RoleSelect() {
 
   return (
     <div>
-      {/* Hero — pulled up under the transparent overlay header (h-14). */}
-      <section className="relative -mt-14 flex h-[92vh] min-h-[620px] flex-col overflow-hidden">
+      {/* Hero — pulled up under the transparent overlay header (h-14). Sized so
+          the role cards below peek into view, signalling the page continues. */}
+      <section className="relative -mt-14 flex h-[82vh] min-h-[560px] flex-col overflow-hidden">
         <img
           src={heroBackground}
           alt=""
           aria-hidden
           className="absolute inset-0 h-full w-full object-cover object-center"
         />
-        {/* Dark gradients: bottom-heavy for white-text contrast, a light top
-            scrim for the overlaid header. The artwork stays vivid; no white fog. */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-black/10" />
+        {/* Layered scrims: a soft dark gradient for white-text contrast, a light
+            top scrim for the overlaid header, and a bottom fade that dissolves
+            the artwork into the page background — the hero merges smoothly into
+            the white section instead of ending on a hard edge. */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/10" />
         <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/45 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-background via-background/75 to-transparent" />
 
         <div className="relative mt-auto w-full">
-          <div className="mx-auto max-w-5xl px-6 pb-20 pt-24">
+          <div className="mx-auto max-w-5xl px-6 pb-52 pt-24">
             <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
               <span className="h-1.5 w-1.5 rounded-full bg-accent-warm" />
               Keyless · offline-first · 16,400 patents indexed
@@ -53,8 +57,9 @@ export function RoleSelect() {
         </div>
       </section>
 
-      {/* Role selection on the white page — breathing room after the hero. */}
-      <section id="roles" className="mx-auto max-w-5xl scroll-mt-20 px-6 pb-24 pt-20">
+      {/* Role selection on the white page — tightened so it follows the hero
+          without a large empty band. */}
+      <section id="roles" className="mx-auto max-w-5xl scroll-mt-20 px-6 pb-24 pt-12">
         <h2 className="text-sm font-medium uppercase tracking-wide text-tertiary">
           Choose how you want to work
         </h2>

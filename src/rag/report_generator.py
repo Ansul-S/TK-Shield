@@ -5,10 +5,55 @@
 # deterministic template so the tool still produces a usable report fully
 # offline (no Ollama running) — offline-first by design.
 
+import re
+
 from loguru import logger
 
 from src.enrichment.prior_art import all_citations
 from src.rag.llm_client import get_llm, LLMUnavailable
+
+# Patterns for reference-like identifiers an LLM might cite inline. Used to flag
+# any ID in the narrative that is NOT in the verified citation/patent set, so a
+# hallucinated PMID/QID/patent number can't masquerade as evidence (M3).
+_PMID_RE = re.compile(r"PMID[:\s]*([0-9]{4,9})", re.I)
+_QID_RE = re.compile(r"\bQ[0-9]{2,}\b")
+_PATENT_RE = re.compile(r"\b([A-Z]{2}[0-9]{5,}[A-Z0-9]*)\b")
+
+
+def _norm_id(s: str) -> str:
+    return re.sub(r"[^A-Z0-9]", "", (s or "").upper())
+
+
+def _strip_kind(pid: str) -> str:
+    """Country prefix + serial, dropping the kind-code: US5401504A -> US5401504."""
+    m = re.match(r"^([A-Z]{0,2}\d+)", (pid or "").upper())
+    return m.group(1) if m else (pid or "").upper()
+
+
+def unverified_citation_refs(narrative: str, citations: list, top_patents: list) -> list:
+    """IDs cited in the LLM narrative that are NOT in the verified evidence set."""
+    allowed = set()
+    for c in citations or []:
+        if c.get("ref_id"):
+            allowed.add(_norm_id(str(c["ref_id"])))
+    for p in top_patents or []:
+        pid = p.get("patent_id") or ""
+        if pid:
+            allowed.add(_norm_id(pid))
+            allowed.add(_norm_id(_strip_kind(pid)))
+
+    found = set()
+    found.update(m.group(1) for m in _PMID_RE.finditer(narrative))
+    found.update(m.group(0) for m in _QID_RE.finditer(narrative))
+    found.update(m.group(1) for m in _PATENT_RE.finditer(narrative))
+
+    bad = []
+    for f in sorted(found):
+        nf = _norm_id(f)
+        if nf in allowed or _norm_id(_strip_kind(f)) in allowed:
+            continue
+        bad.append(f)
+    return bad
 
 _SYSTEM = (
     "You are a defensive intellectual-property analyst specializing in "
@@ -150,6 +195,29 @@ def generate_report(tk_entry: dict, context: dict, llm=None) -> dict:
                 llm_used = True
         except LLMUnavailable as e:
             logger.warning(f"Falling back to deterministic report: {e}")
+        except Exception as e:  # noqa: BLE001 — any LLM error degrades gracefully
+            logger.warning(f"LLM report error, using deterministic template: {e}")
+
+    citations = all_citations(context["evidence"])
+    top_patents = [
+        {
+            "patent_id": p.get("metadata", {}).get("patent_id", p.get("id")),
+            "title": p.get("metadata", {}).get("title", ""),
+            "assignee": p.get("metadata", {}).get("assignee", ""),
+            "filing_date": p.get("metadata", {}).get("filing_date", ""),
+            "country": p.get("metadata", {}).get("country", ""),
+            "similarity": p.get("similarity_score", 0),
+        }
+        for p in context["patents"][:5]
+    ]
+    # Trust guard: if the LLM narrative cites identifiers not in the verified set,
+    # surface them so the UI/reader treats the narrative as a draft (M3).
+    unverified = (
+        unverified_citation_refs(f"{assessment}\n{opposition}", citations, top_patents)
+        if llm_used else []
+    )
+    if unverified:
+        logger.warning(f"LLM narrative cited unverified identifiers: {unverified}")
 
     return {
         "tk_entry": {
@@ -157,20 +225,11 @@ def generate_report(tk_entry: dict, context: dict, llm=None) -> dict:
             ("tk_id", "practice_name", "community", "country", "documentation_date")
         },
         "risk": context["risk"],
-        "top_patents": [
-            {
-                "patent_id": p.get("metadata", {}).get("patent_id", p.get("id")),
-                "title": p.get("metadata", {}).get("title", ""),
-                "assignee": p.get("metadata", {}).get("assignee", ""),
-                "filing_date": p.get("metadata", {}).get("filing_date", ""),
-                "country": p.get("metadata", {}).get("country", ""),
-                "similarity": p.get("similarity_score", 0),
-            }
-            for p in context["patents"][:5]
-        ],
-        "citations": all_citations(context["evidence"]),
+        "top_patents": top_patents,
+        "citations": citations,
         "assessment": assessment,
         "opposition_draft": opposition,
         "llm_used": llm_used,
+        "unverified_citation_refs": unverified,
         "sources_skipped": context["evidence"].get("sources_skipped", []),
     }

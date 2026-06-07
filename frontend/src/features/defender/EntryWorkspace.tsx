@@ -41,6 +41,7 @@ export function EntryWorkspace({ tkId }: { tkId: string }) {
   const monitor = useMonitor();
   const [view, setView] = useState<View>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   if (entry.isPending) return <Spinner label="Loading entry…" />;
   if (entry.isError)
@@ -51,8 +52,13 @@ export function EntryWorkspace({ tkId }: { tkId: string }) {
 
   async function exportMarkdown() {
     setExporting(true);
+    setExportError(null);
     try {
-      const md = await apiPostText("/api/report?format=markdown", body);
+      // Reuse the already-generated report's markdown if present, so export
+      // doesn't re-run the slow (tens-of-seconds) report pipeline (F5).
+      const md =
+        report.data?.markdown ??
+        (await apiPostText("/api/report?format=markdown", body));
       const url = URL.createObjectURL(
         new Blob([md], { type: "text/markdown" }),
       );
@@ -61,6 +67,8 @@ export function EntryWorkspace({ tkId }: { tkId: string }) {
       a.download = `${tkId}-report.md`;
       a.click();
       URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Export failed.");
     } finally {
       setExporting(false);
     }
@@ -143,6 +151,10 @@ export function EntryWorkspace({ tkId }: { tkId: string }) {
         </Button>
       </div>
 
+      {exportError && (
+        <p className="text-xs text-red-700">Export failed: {exportError}</p>
+      )}
+
       {view === "analyze" && <AnalyzeResult m={analyze} />}
       {view === "report" && <ReportResult m={report} />}
       {view === "monitor" && <MonitorResult m={monitor} />}
@@ -191,6 +203,15 @@ function ReportResult({ m }: { m: ReturnType<typeof useReport> }) {
         <p className="rounded-sm border border-border bg-neutral/50 px-3 py-2 text-xs text-secondary">
           AI narrative generated offline (LLM unavailable) — figures and
           citations are exact.
+        </p>
+      )}
+
+      {r.unverified_citation_refs && r.unverified_citation_refs.length > 0 && (
+        <p className="rounded-sm border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          ⚠️ The AI narrative referenced identifier(s) not in the verified
+          citation list ({r.unverified_citation_refs.join(", ")}). Treat the
+          narrative as a draft — rely on the prior-art citations below as the
+          authoritative evidence.
         </p>
       )}
 

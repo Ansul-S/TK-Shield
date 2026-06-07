@@ -25,6 +25,49 @@ from src.utils.config import config
 
 DUKE_PROVENANCE = "Documented ethnobotany (Dr. Duke, USDA)"
 
+# Values that are NOT a holder people/community — countries, continents/regions,
+# and religions. Duke sometimes puts these in the parenthetical (e.g.
+# 'X(ASIA)', 'X(INDIA)', 'X(HINDU)'); they must not be attributed as a
+# community (Nagoya/WIPO-IGC). Genuine peoples (Santal, Seri, Aztec, …) are NOT
+# listed here, so they pass through. Compared case-insensitively.
+_GEO_REGIONS_RELIGIONS = {
+    # continents / macro-regions
+    "ASIA", "AFRICA", "EUROPE", "AMERICA", "NORTH AMERICA", "SOUTH AMERICA",
+    "CENTRAL AMERICA", "LATIN AMERICA", "OCEANIA", "EURASIA", "MIDDLE EAST",
+    "SCANDINAVIA", "CARIBBEAN", "AMAZONIA", "INDOCHINA", "MEDITERRANEAN",
+    "WEST INDIES", "EAST INDIES", "BALKANS", "HIMALAYA", "HIMALAYAS",
+    # religions / faiths (descriptors, not peoples)
+    "HINDU", "MUSLIM", "ISLAM", "ISLAMIC", "CHRISTIAN", "CATHOLIC", "BUDDHIST",
+    "BUDDHISM", "JEWISH", "JUDAISM", "SIKH", "JAIN", "TAOIST", "SHINTO",
+}
+
+# Common country names (uppercase). Not exhaustive, but covers the Duke labels.
+_COUNTRIES = {
+    "INDIA", "CHINA", "JAPAN", "USA", "US", "UNITED STATES", "UK",
+    "UNITED KINGDOM", "ENGLAND", "SCOTLAND", "IRELAND", "FRANCE", "GERMANY",
+    "ITALY", "SPAIN", "PORTUGAL", "GREECE", "TURKEY", "RUSSIA", "POLAND",
+    "NETHERLANDS", "BELGIUM", "SWEDEN", "NORWAY", "FINLAND", "DENMARK",
+    "SWITZERLAND", "AUSTRIA", "HUNGARY", "ROMANIA", "BULGARIA", "UKRAINE",
+    "EGYPT", "MOROCCO", "ALGERIA", "TUNISIA", "NIGERIA", "GHANA", "KENYA",
+    "ETHIOPIA", "TANZANIA", "UGANDA", "SOUTH AFRICA", "ZIMBABWE", "ZAMBIA",
+    "SUDAN", "SENEGAL", "CAMEROON", "CONGO", "MADAGASCAR", "MEXICO", "BRAZIL",
+    "ARGENTINA", "CHILE", "PERU", "COLOMBIA", "VENEZUELA", "BOLIVIA",
+    "ECUADOR", "PARAGUAY", "URUGUAY", "CANADA", "GUATEMALA", "CUBA",
+    "PAKISTAN", "BANGLADESH", "SRI LANKA", "NEPAL", "BHUTAN", "AFGHANISTAN",
+    "IRAN", "IRAQ", "ISRAEL", "SAUDI ARABIA", "YEMEN", "JORDAN", "LEBANON",
+    "SYRIA", "THAILAND", "VIETNAM", "CAMBODIA", "LAOS", "MYANMAR", "BURMA",
+    "MALAYSIA", "INDONESIA", "PHILIPPINES", "SINGAPORE", "KOREA",
+    "SOUTH KOREA", "NORTH KOREA", "MONGOLIA", "AUSTRALIA", "NEW ZEALAND",
+    "FIJI", "PAPUA NEW GUINEA", "HAWAII", "TIBET",
+}
+
+_GEO_NOT_PEOPLE = _GEO_REGIONS_RELIGIONS | _COUNTRIES
+
+
+def is_not_a_people(value: str) -> bool:
+    """True if `value` is a country/region/religion (not a holder community)."""
+    return (value or "").strip().upper() in _GEO_NOT_PEOPLE
+
 
 def split_geo(raw) -> tuple[str, str]:
     """Split a Duke geographic label into (country, community/people).
@@ -32,8 +75,9 @@ def split_geo(raw) -> tuple[str, str]:
     Duke encodes the documented holder group inside the country cell and tags
     some labels with a footnote asterisk, e.g. 'INDIA(SANTAL)' -> ('INDIA',
     'Santal'), 'JAPAN*' -> ('JAPAN', ''), 'US(AMERINDIAN)' -> ('US',
-    'Amerindian'). Plain labels pass through unchanged. Surfacing the people /
-    community is the attribution the Nagoya Protocol and WIPO IGC center on.
+    'Amerindian'). A parenthetical that is itself a country/region/religion
+    (e.g. 'X(ASIA)', 'X(HINDU)') is NOT a people, so it is dropped rather than
+    mis-attributed as a community. Plain labels pass through unchanged.
     """
     s = str(raw or "").strip()
     if s.lower() in ("nan", "none", ""):
@@ -41,7 +85,11 @@ def split_geo(raw) -> tuple[str, str]:
     s = s.rstrip("*").strip()
     m = re.search(r"\(([^)]+)\)\s*$", s)
     if m:
-        return s[: m.start()].strip(), m.group(1).strip().title()
+        country = s[: m.start()].strip()
+        people = m.group(1).strip().title()
+        if is_not_a_people(people):
+            return country, ""
+        return country, people
     return s, ""
 
 

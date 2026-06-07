@@ -1,8 +1,19 @@
 # src/search/hybrid_ranker.py
 
+import re
+
 from src.search.vector_store import search as semantic_search
 from src.search.keyword_search import KeywordSearchEngine
 from src.utils.config import config
+
+
+def _norm_patent_id(pid: str) -> str:
+    """Normalize a patent id for dedup by keeping the country prefix + serial
+    number and dropping the trailing kind-code, so the seeded 'US5401504A' and a
+    bulk-corpus 'US5401504' collapse to one ('US5401504'). 'EP0436257B1' ->
+    'EP0436257'."""
+    m = re.match(r"^([A-Z]{0,2}\d+)", (pid or "").strip().upper())
+    return m.group(1) if m else (pid or "").strip().upper()
 
 
 def reciprocal_rank_fusion(
@@ -100,7 +111,25 @@ class HybridSearchEngine:
             keyword_weight=config.KEYWORD_WEIGHT,
         )
 
-        return hybrid_results[:n_results]
+        # Collapse near-duplicate patents differing only by kind-code suffix,
+        # keeping the higher-ranked one (M4: avoids showing the same patent
+        # twice). Merge metadata so a richer twin (e.g. a seeded row with an
+        # ipc_code/assignee the bulk row lacks) backfills empty fields on the
+        # kept entry — otherwise dedup could drop a real risk signal.
+        deduped, kept = [], {}
+        for r in hybrid_results:
+            pid = r.get("metadata", {}).get("patent_id") or r.get("id", "")
+            key = _norm_patent_id(pid) or pid
+            if key in kept:
+                km = kept[key].setdefault("metadata", {})
+                for mk, mv in (r.get("metadata") or {}).items():
+                    if mv and not km.get(mk):
+                        km[mk] = mv
+                continue
+            kept[key] = r
+            deduped.append(r)
+
+        return deduped[:n_results]
 
 
 # ── Quick test ──────────────────────────────────────────────

@@ -74,3 +74,29 @@ def test_report_always_has_exact_facts_and_citations():
     assert {"source": "pubmed", "ref_id": "111", "title": "Turmeric study",
             "url": "https://pubmed.ncbi.nlm.nih.gov/111/"} in report["citations"]
     assert report["sources_skipped"] == ["gbif"]
+
+
+def test_unverified_citation_refs_helper():
+    # Only IDs absent from the verified set are flagged; kind-code differences and
+    # legit IDs (PMID 111, patent US5401504) are tolerated. (M3)
+    cites = [{"source": "pubmed", "ref_id": "111", "title": "t", "url": "u"}]
+    pats = [{"patent_id": "US5401504A"}]
+    narrative = ("As shown in PMID 111 and patent US5401504 the claim lacks novelty; "
+                 "see also PMID 99999999 and patent US0000000.")
+    bad = report_generator.unverified_citation_refs(narrative, cites, pats)
+    assert "99999999" in bad and "US0000000" in bad
+    assert "111" not in bad and "US5401504" not in bad
+
+
+def test_report_flags_hallucinated_citation_in_llm_narrative():
+    payload = {"assessment": "Per PMID 12345678 this is prior art.",
+               "opposition_draft": "We cite PMID 111."}
+    report = report_generator.generate_report(_entry(), _context(), llm=_FakeLLM(True, payload))
+    assert report["llm_used"] is True
+    # 111 is a real citation; 12345678 is hallucinated → surfaced.
+    assert report["unverified_citation_refs"] == ["12345678"]
+
+
+def test_clean_narrative_has_no_unverified_refs():
+    report = report_generator.generate_report(_entry(), _context(), llm=_FakeLLM(False))
+    assert report["unverified_citation_refs"] == []

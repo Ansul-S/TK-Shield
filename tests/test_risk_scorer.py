@@ -42,3 +42,39 @@ def test_score_never_exceeds_max():
     patents = [_patent(0.99, assignee="Monsanto", filing_date="1999-01-01", country="US")]
     r = score_risk(tk, patents)
     assert 0 <= r["total_score"] <= r["max_possible"] == 100
+
+
+def test_relevance_gate_blocks_weak_match_specificity():
+    # A benign India-origin practice that only weakly matches the corpus must NOT
+    # be inflated to MEDIUM/HIGH by the structural factors (geographic, assignee,
+    # IPC). Below the relevance gate, only the similarity factor applies. (H1)
+    tk = {"country": "IN", "documentation_date": "2020-01-01"}
+    weak = [_patent(0.49, assignee="Acme Inc.", filing_date="2015-01-01",
+                    country="US", ipc_code="A61K36/906")]
+    r = score_risk(tk, weak)
+    assert r["relevance_gated"] is True
+    assert r["factors"]["geographic_risk"] == 0
+    assert r["factors"]["assignee_risk"] == 0
+    assert r["factors"]["ipc_risk"] == 0
+    assert r["risk_level"] in ("MINIMAL", "LOW")
+
+
+def test_missing_data_is_not_treated_as_risk():
+    # Unknown date/country/assignee/IPC must contribute 0, not an "assume risk"
+    # default — even on a strong match. (H1)
+    tk = {"country": "", "documentation_date": ""}
+    hit = [_patent(0.9, assignee="", filing_date="", country="", ipc_code="")]
+    r = score_risk(tk, hit)
+    assert r["factors"]["temporal_risk"] == 0
+    assert r["factors"]["geographic_risk"] == 0
+    assert r["factors"]["assignee_risk"] == 0
+    assert r["factors"]["ipc_risk"] == 0
+    # Only the (strong) similarity factor remains.
+    assert r["factors"]["similarity_score"] == 40
+
+
+def test_assignee_word_boundary_avoids_false_corp_match():
+    # "Cincinnati" contains "inc" but is not a corporation marker. (L3)
+    tk = {"country": "IN", "documentation_date": "1990-01-01"}
+    hit = [_patent(0.9, assignee="City of Cincinnati", filing_date="1999-01-01", country="US")]
+    assert score_risk(tk, hit)["factors"]["assignee_risk"] == 0

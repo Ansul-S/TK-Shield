@@ -4,7 +4,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from api.deps import get_llm_client
+from api.deps import LLMBusy, get_llm_client, llm_slot
 from api.schemas import MAX_PATENT_TEXT, MAX_SHORT, NResults
 from src.clients import patentsview_client
 from src.rag import novelty
@@ -36,6 +36,9 @@ def check_novelty(req: NoveltyIn) -> dict:
         )
 
     try:
-        return novelty.assess_novelty(text, n_results=req.n_results, llm=get_llm_client())
+        with llm_slot():  # bound concurrent expensive requests
+            return novelty.assess_novelty(text, n_results=req.n_results, llm=get_llm_client())
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except LLMBusy as e:
+        raise HTTPException(status_code=503, detail=str(e))

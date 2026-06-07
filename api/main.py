@@ -15,6 +15,7 @@ from loguru import logger
 
 from api.routes import analyze, monitor, novelty, report, stats, tk
 from src.registry import tk_store
+from src.utils.config import config
 
 
 @asynccontextmanager
@@ -51,7 +52,9 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # local dev / single-host deployment
+    # Defaults to "*" for local/single-host use; set CORS_ORIGINS in .env to a
+    # comma-separated allow-list before exposing the app to a network.
+    allow_origins=config.CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

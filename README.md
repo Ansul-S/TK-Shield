@@ -12,16 +12,17 @@ Given a documented practice, TK-Shield finds the patents that may claim it, scor
 
 ## The result, first
 
-The three landmark bio-piracy disputes — **turmeric** (`US5401504A`), **neem** (`EP0436257B1`), and **basmati** (`US5663484A`) — were each historically revoked using documented prior art. TK-Shield was evaluated on whether it can independently re-identify them from **folk-worded TK descriptions that share no text with the patents**:
+The three landmark bio-piracy disputes — **turmeric** (`US5401504A`), **neem** (`EP0436257B1`), and **basmati** (`US5663484A`) — were each historically revoked using documented prior art. TK-Shield was evaluated on whether it can independently re-identify them from **independently-authored, folk-worded TK descriptions** — different sentences from the patents, though sharing the plant/use terms a real registrant would naturally use:
 
 | Metric | Result |
 |---|---|
 | Correct patent retrieved in the top 5 (**Precision@5**) | **100 %** |
-| Correct patent ranked #1 (**Precision@1**) | **67 %** |
-| Mean Reciprocal Rank | **0.833** |
+| Correct patent ranked #1 (**Precision@1**) | **100 %** |
+| Mean Reciprocal Rank | **1.000** |
 | Cases scored **HIGH / CRITICAL** risk | **100 %** |
+| Benign control practices flagged (**false-positive rate**) | **0 %** |
 
-All three were flagged **CRITICAL** and retrieved as the closest or second-closest match, from a corpus of **16,371 real US patents**. Reproduce it:
+All three were flagged **CRITICAL** and retrieved as the closest match, from a corpus of **16,292 real US patents**; three benign control practices were correctly left at MINIMAL risk. An **ablation** (BM25-only vs semantic-only vs hybrid) and the controls are written into the report — note that on these canonical cases the shared plant terms let keyword search alone already rank the target, so hybrid's added value is for synonym/multilingual queries these descriptions don't stress. This is a small demonstration on canonical cases, not a population-scale benchmark. Reproduce it:
 
 ```bash
 PYTHONPATH=. python -m src.evaluation.landmark_eval   # writes docs/evaluation_report.md
@@ -66,20 +67,10 @@ flowchart LR
 
 ## At a glance
 
-- **16,371** real US patents (PatentsView bulk — real titles, assignees, grant dates)
+- **16,292** real US patents (PatentsView bulk — real titles, assignees, grant dates)
 - **2,030** documented TK practices (Dr. Duke CC0 ethnobotany + curated multilingual Wikidata)
 - **Keyless** end-to-end · **offline-first** · **no runtime CDN** · local LLM optional
-- Backend: **48** network-free tests · Frontend: **21** tests (incl. XSS-safety regressions)
-
-## Screenshots
-
-| Defender — risk result | Examiner — novelty verdict |
-|---|---|
-| ![Defender risk result](docs/screenshots/defender.png) | ![Examiner novelty verdict](docs/screenshots/examiner.png) |
-| **Researcher — analytics** | **Landing** |
-| ![Researcher analytics](docs/screenshots/researcher.png) | ![Landing](docs/screenshots/landing.png) |
-
-> Capture instructions in [docs/screenshots/README.md](docs/screenshots/README.md).
+- Backend: **58** network-free tests · Frontend: **21** tests (incl. XSS-safety regressions)
 
 ---
 
@@ -124,17 +115,12 @@ For live development with hot-reload, run the backend with `--reload` and `npm -
 **Backend** FastAPI · ChromaDB (vector search) · in-memory BM25 · SQLite (registry) · sentence-transformers · spaCy NER · resilient `httpx` clients · Ollama (local LLM) ·
 **Frontend** Vite + React 18 + TypeScript · TanStack Query · Tailwind v4 · Radix · Vitest.
 
-See **[CLAUDE.md](CLAUDE.md)** for full architecture, and **[docs/evaluation_report.md](docs/evaluation_report.md)** for the latest evaluation.
-
 ## Tests
 
 ```bash
 PYTHONPATH=. pytest tests/ -q          # backend — network-free, fixture-based
 npm --prefix frontend run test         # frontend — Vitest (incl. XSS-safety)
 ```
-
-See **[VERIFICATION.md](VERIFICATION.md)** for reproducible evidence (commands + observed output) behind every
-claim here, and a ~2-minute keyless demo path.
 
 ## Limitations
 
@@ -145,7 +131,7 @@ misappropriation.** Known limits:
 - **Language** — analysis is English-centric; multilingual TK names are matched but the pipeline is English-first.
 - **Model** — the local LLM is small (`llama3.2`, ~3B); narrative quality is below frontier API models — a deliberate keyless/offline trade-off, with an exact deterministic fallback.
 - **Risk model** — interpretable hand-weighted factors, not learned from a labelled dataset.
-- **Evaluation** — demonstrated on the three landmark cases; not yet a large labelled benchmark, so no population-level false-positive rate.
+- **Evaluation** — demonstrated on the three landmark cases plus three benign controls (0% false positives) and a retrieval ablation; this is a small canonical-case demonstration, **not** a population-scale labelled benchmark with precision/recall measured across many patents and phrasings.
 - **Data** — the ethnobotany source is broad but skews to English-documented knowledge, under-representing some communities.
 - **Deployment** — hardened for local/single-user; **no authentication, rate limiting, or restricted CORS** — the gating items for any public hosting.
 
@@ -163,17 +149,12 @@ Designed and directed by **Ansul Suryawanshi** as an AI-assisted engineering pro
 environmental-science background to the defensive protection of traditional knowledge. The architecture,
 data-source, evaluation, security, and product decisions are mine — keyless / offline-first design, hybrid
 retrieval over pure embeddings, an interpretable risk model, the three-persona structure, the community-
-attribution feature, and the WIPO policy framing — and the system is verified end-to-end (see
-[VERIFICATION.md](VERIFICATION.md)). Implementation was accelerated with an AI coding assistant under my
-direction and review.
+attribution feature, and the WIPO policy framing — and the system is verified end-to-end. Implementation was
+accelerated with an AI coding assistant under my direction and review.
 
 ## Documentation
 
-- **[CLAUDE.md](CLAUDE.md)** — full architecture and setup-from-scratch
-- **[VERIFICATION.md](VERIFICATION.md)** — reproducible evidence for every claim
-- **[docs/evaluation_report.md](docs/evaluation_report.md)** — latest evaluation results
-- **[docs/TK-Shield-Whitepaper.pdf](docs/TK-Shield-Whitepaper.pdf)** — project brief (PDF)
-- **[docs/INTERVIEW_PREP.md](docs/INTERVIEW_PREP.md)** — Q&A about the project
+- **[Project brief (PDF)](docs/TK-Shield-Whitepaper.pdf)** — problem, method, evaluation results, and WIPO policy alignment.
 
 ---
 

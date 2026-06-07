@@ -93,26 +93,17 @@ function Header({ overlay }: { overlay: boolean }) {
         {health.isError ? (
           <span className="text-sm text-error">API offline</span>
         ) : (
-          <>
-            <StatusDot
-              on={!!health.data?.llm_available}
-              label="LLM"
-              hint={
-                health.data?.llm_available
-                  ? "Local LLM online — reports include an AI-written narrative."
-                  : "AI narrative offline — figures and citations are still exact (deterministic fallback)."
-              }
-            />
-            <StatusDot
-              on={!!health.data?.live_patents_available}
-              label="Live patents"
-              hint={
-                health.data?.live_patents_available
-                  ? "Live PatentsView monitoring is available."
-                  : "Live monitoring is off (no API key) — an optional feature, not an error."
-              }
-            />
-          </>
+          // Live-patent (PatentsView) monitoring is not wired yet — its status
+          // dot is intentionally omitted until that feature is added at scale.
+          <StatusDot
+            on={!!health.data?.llm_available}
+            label="LLM"
+            hint={
+              health.data?.llm_available
+                ? "Local LLM online — reports include an AI-written narrative."
+                : "AI narrative offline — figures and citations are still exact (deterministic fallback)."
+            }
+          />
         )}
       </div>
     </header>

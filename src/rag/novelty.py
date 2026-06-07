@@ -11,9 +11,9 @@ from src.rag.llm_client import get_llm, LLMUnavailable
 from src.search import vector_store
 from src.utils.config import config
 
-# Cosine-similarity thresholds → verdict.
-_NOT_NOVEL = 0.60
-_POSSIBLE = 0.45
+# Cosine-similarity thresholds → verdict (tunable via config/.env).
+_NOT_NOVEL = config.NOVELTY_NOT_NOVEL
+_POSSIBLE = config.NOVELTY_POSSIBLE
 
 _SYSTEM = (
     "You are a patent examiner assessing novelty against documented traditional "
@@ -49,8 +49,10 @@ def _deterministic(patent_text: str, verdict: str, matches: list[dict]) -> str:
 def assess_novelty(patent_text: str, n_results: int = 5, llm=None) -> dict:
     """
     Search the TK registry for prior art matching `patent_text` and return a
-    novelty assessment. Never raises; degrades to a deterministic narrative
-    when the LLM is unavailable.
+    novelty assessment. Raises ValueError only for empty input; otherwise never
+    raises — the verdict is computed from cosine similarity (so it is immune to
+    prompt injection in the patent text), and the narrative degrades to a
+    deterministic template whenever the LLM is unavailable or errors.
     """
     if not patent_text.strip():
         raise ValueError("patent_text is required")
@@ -77,11 +79,13 @@ def assess_novelty(patent_text: str, n_results: int = 5, llm=None) -> dict:
         )
         try:
             out = llm.generate(prompt, system=_SYSTEM)
-            if out.strip():
+            if out and out.strip():
                 assessment = out.strip()
                 llm_used = True
         except LLMUnavailable as e:
             logger.warning(f"Novelty LLM fallback: {e}")
+        except Exception as e:  # noqa: BLE001 — any LLM error degrades gracefully
+            logger.warning(f"Novelty LLM error, using deterministic note: {e}")
 
     return {
         "verdict": verdict,

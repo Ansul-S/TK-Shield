@@ -9,8 +9,13 @@ load_dotenv()
 
 class Config:
     """
-    Central configuration — all settings come from .env
-    Nothing is hardcoded anywhere in the codebase
+    Central configuration: the single source of truth for tunables.
+
+    Every value has a sensible default and can be overridden via .env — model
+    names, search weights, the risk-model weights/thresholds, API-hardening
+    knobs, paths and toggles all live here so behaviour can be tuned without a
+    code change. (Algorithmic *shape* — e.g. the similarity curve — lives in the
+    relevant module; the policy *numbers* live here.)
     """
 
     # ── External API endpoints ──────────────────────────────
@@ -37,6 +42,9 @@ class Config:
     OLLAMA_BASE_URL  = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_MODEL     = os.getenv("OLLAMA_MODEL", "llama3.2")
     LLM_TIMEOUT      = float(os.getenv("LLM_TIMEOUT", "120"))
+    # Cap generated tokens so a small local model can't run for minutes on a
+    # single report. Bounds /report + /novelty latency (0 = model default).
+    LLM_NUM_PREDICT  = int(os.getenv("LLM_NUM_PREDICT", "900"))
 
     # ── ChromaDB ────────────────────────────────────────────
     CHROMA_DB_PATH   = os.getenv("CHROMA_DB_PATH", "./chroma_db")
@@ -120,6 +128,65 @@ class Config:
     DATA_RAW_PATH       = Path("data/raw")
     DATA_PROCESSED_PATH = Path("data/processed")
     PATENTS_CSV         = Path(os.getenv("PATENTS_CSV", "data/raw/patents_medicinal.csv"))
+
+    # ── Corpus hygiene ──────────────────────────────────────
+    # Substrings of the `source` field to EXCLUDE when indexing, so the
+    # searchable corpus is genuinely real-metadata patents. ccdv is the
+    # low-fidelity synthetic HF fallback; drop it from the real-patent corpus.
+    EXCLUDE_PATENT_SOURCES = [
+        s.strip().lower() for s in os.getenv("EXCLUDE_PATENT_SOURCES", "ccdv").split(",")
+        if s.strip()
+    ]
+
+    # ── Risk model (was hardcoded; now tunable) ─────────────
+    # Max points per factor (sum = 100).
+    RISK_WEIGHT_SIMILARITY = int(os.getenv("RISK_WEIGHT_SIMILARITY", "40"))
+    RISK_WEIGHT_TEMPORAL   = int(os.getenv("RISK_WEIGHT_TEMPORAL", "20"))
+    RISK_WEIGHT_GEOGRAPHIC = int(os.getenv("RISK_WEIGHT_GEOGRAPHIC", "15"))
+    RISK_WEIGHT_ASSIGNEE   = int(os.getenv("RISK_WEIGHT_ASSIGNEE", "15"))
+    RISK_WEIGHT_IPC        = int(os.getenv("RISK_WEIGHT_IPC", "10"))
+    # Relevance gate: the temporal/geographic/assignee/IPC "aggravating" factors
+    # only apply when there is a CREDIBLE candidate patent (top similarity ≥
+    # gate). Below it, risk reflects similarity alone — this stops benign,
+    # weakly-matching practices from being inflated by structural factors
+    # (foreign filing, post-dating, corporate assignee) that are meaningless
+    # without a real match.
+    RISK_RELEVANCE_GATE    = float(os.getenv("RISK_RELEVANCE_GATE", "0.50"))
+    # Band thresholds (inclusive lower bounds, on the 0–100 total).
+    RISK_BAND_CRITICAL = int(os.getenv("RISK_BAND_CRITICAL", "80"))
+    RISK_BAND_HIGH     = int(os.getenv("RISK_BAND_HIGH", "60"))
+    RISK_BAND_MEDIUM   = int(os.getenv("RISK_BAND_MEDIUM", "40"))
+    RISK_BAND_LOW      = int(os.getenv("RISK_BAND_LOW", "20"))
+
+    # Cosine-similarity thresholds for the examiner novelty verdict.
+    NOVELTY_NOT_NOVEL = float(os.getenv("NOVELTY_NOT_NOVEL", "0.60"))
+    NOVELTY_POSSIBLE  = float(os.getenv("NOVELTY_POSSIBLE", "0.45"))
+
+    # IPC/CPC prefixes historically associated with bio-piracy (risk factor 5).
+    HIGH_RISK_IPC_CODES = [
+        c.strip() for c in os.getenv(
+            "HIGH_RISK_IPC_CODES",
+            # A01N = biocides/pesticides from plant/natural material (neem etc.)
+            "A61K36,A61K31,A01H5,C12N15,A23L33,A61P31,A01N",
+        ).split(",") if c.strip()
+    ]
+    # Corporate assignees with a documented bio-piracy history (risk factor 4).
+    HIGH_RISK_ASSIGNEES = [
+        a.strip().lower() for a in os.getenv(
+            "HIGH_RISK_ASSIGNEES",
+            "w.r. grace,ricetec,unilever,monsanto,bayer,syngenta,dupont,"
+            "dow agrosciences,pfizer,glaxosmithkline,novartis,roche",
+        ).split(",") if a.strip()
+    ]
+
+    # ── API hardening ───────────────────────────────────────
+    # Comma-separated allowed CORS origins ("*" = any; tighten for deployment).
+    CORS_ORIGINS = [
+        o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()
+    ] or ["*"]
+    # Cap concurrent LLM-backed requests (/report, /novelty) so a burst can't
+    # pin the box. Excess requests get a clean 503 instead of all stalling.
+    MAX_CONCURRENT_LLM = int(os.getenv("MAX_CONCURRENT_LLM", "2"))
 
 
 config = Config()

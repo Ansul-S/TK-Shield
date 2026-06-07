@@ -8,10 +8,16 @@
 # Each source degrades independently: if one returns nothing (disabled, no
 # data, or down), it is recorded in `sources_skipped` and the rest proceed.
 
+import concurrent.futures as cf
+
 from loguru import logger
 
 from src.clients import pubmed_client, wikidata_client, gbif_client
 from src.utils.config import config
+
+# Cap how many plants we fan out enrichment for, so an entry with many plants
+# can't trigger an unbounded number of network calls.
+_MAX_ENRICH_PLANTS = 8
 
 
 def _build_query(plants: list[str], uses: list[str]) -> str:
@@ -47,23 +53,48 @@ def gather_evidence(plants: list[str], uses: list[str],
         "sources_skipped": [],
     }
 
-    # --- Wikidata + GBIF, per plant ---
-    for plant in plants:
-        if config.ENABLE_WIKIDATA:
-            wd = wikidata_client.search_plant(plant)
-            if wd:
-                bundle["taxonomy"].append(wd)
-                bundle["aliases"].extend(wd.get("aliases", []))
-        if config.ENABLE_GBIF:
-            gb = gbif_client.species_origin(plant)
-            if gb:
-                bundle["taxonomy"].append(gb)
-                bundle["origin_countries"].extend(gb.get("native_countries", []))
+    # Fan out all independent network calls concurrently. Each client already
+    # returns None/[] on failure (never raises), so graceful degradation is
+    # preserved — concurrency only cuts wall-time (was sequential per plant).
+    enrich_plants = plants[:_MAX_ENRICH_PLANTS]
+    wd_results: dict[str, dict | None] = {}
+    gb_results: dict[str, dict | None] = {}
+    lit_result: list = []
+    with cf.ThreadPoolExecutor(max_workers=8) as ex:
+        futs = {}
+        for plant in enrich_plants:
+            if config.ENABLE_WIKIDATA:
+                futs[ex.submit(wikidata_client.search_plant, plant)] = ("wd", plant)
+            if config.ENABLE_GBIF:
+                futs[ex.submit(gbif_client.species_origin, plant)] = ("gb", plant)
+        lit_fut = None
+        if config.ENABLE_PUBMED:
+            query = _build_query(plants, uses)
+            if query.strip():
+                lit_fut = ex.submit(pubmed_client.search_literature, query, max_literature)
+        for fut, (kind, plant) in futs.items():
+            try:
+                res = fut.result()
+            except Exception:  # noqa: BLE001 — never let one source break the bundle
+                res = None
+            (wd_results if kind == "wd" else gb_results)[plant] = res
+        if lit_fut is not None:
+            try:
+                lit_result = lit_fut.result() or []
+            except Exception:  # noqa: BLE001
+                lit_result = []
 
-    # --- PubMed literature for the plant+use combination ---
-    if config.ENABLE_PUBMED:
-        query = _build_query(plants, uses)
-        bundle["literature"] = pubmed_client.search_literature(query, retmax=max_literature)
+    # Assemble deterministically in plant order (wikidata then gbif per plant).
+    for plant in enrich_plants:
+        wd = wd_results.get(plant)
+        if wd:
+            bundle["taxonomy"].append(wd)
+            bundle["aliases"].extend(wd.get("aliases", []))
+        gb = gb_results.get(plant)
+        if gb:
+            bundle["taxonomy"].append(gb)
+            bundle["origin_countries"].extend(gb.get("native_countries", []))
+    bundle["literature"] = lit_result
 
     # Dedupe taxonomy by (source, ref_id) — the same entity is often reached
     # via both the common and scientific name.

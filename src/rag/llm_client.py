@@ -52,6 +52,10 @@ class OllamaClient:
         body = {"model": self.model, "messages": messages, "stream": False}
         if json_mode:
             body["format"] = "json"
+        # Cap generated tokens so a small local model can't run for minutes on a
+        # single request (bounds /report + /novelty latency). 0 = model default.
+        if config.LLM_NUM_PREDICT > 0:
+            body["options"] = {"num_predict": config.LLM_NUM_PREDICT}
 
         try:
             resp = httpx.post(f"{self.base_url}/api/chat", json=body, timeout=self.timeout)

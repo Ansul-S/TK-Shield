@@ -3,7 +3,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { apiDelete, apiGet, apiPost } from "./client";
+import { SLOW_TIMEOUT_MS, apiDelete, apiGet, apiPost } from "./client";
 import type {
   AnalyzeBody,
   AnalyzeResult,
@@ -92,18 +92,19 @@ export function useAnalyze() {
   });
 }
 
-// Slow (~15–45s when the LLM is on): live enrichment + generation.
+// Slow (tens of seconds, up to ~2 min on a small local model): live enrichment
+// + LLM generation. Uses the long client timeout so a hung call fails cleanly.
 export function useReport() {
   return useMutation({
     mutationFn: (body: AnalyzeBody) =>
-      apiPost<ReportResult>("/api/report?format=json", body),
+      apiPost<ReportResult>("/api/report?format=json", body, SLOW_TIMEOUT_MS),
   });
 }
 
 export function useNovelty() {
   return useMutation({
     mutationFn: (body: NoveltyBody) =>
-      apiPost<NoveltyResult>("/api/novelty", body),
+      apiPost<NoveltyResult>("/api/novelty", body, SLOW_TIMEOUT_MS),
   });
 }
 

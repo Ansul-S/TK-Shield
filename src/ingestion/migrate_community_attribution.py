@@ -18,7 +18,11 @@ import sqlite3
 
 from loguru import logger
 
-from src.ingestion.tk_sources.duke_importer import DUKE_PROVENANCE, split_geo
+from src.ingestion.tk_sources.duke_importer import (
+    DUKE_PROVENANCE,
+    is_not_a_people,
+    split_geo,
+)
 from src.registry import tk_store
 from src.search import vector_store
 from src.utils.config import config
@@ -37,9 +41,14 @@ def migrate() -> dict:
     for r in rows:
         country, people = split_geo(r["country"])
         new_country = country.upper()  # tk_store stores country uppercased
+        new_community = r["community"] or ""
+        # Clear a previously mis-attributed country/region/religion that was
+        # stored as a community (e.g. 'India', 'Asia', 'Hindu') — these are not
+        # holder peoples (M2). Genuine peoples (Santal, Aztec, …) are kept.
+        if new_community and new_community != DUKE_PROVENANCE and is_not_a_people(new_community):
+            new_community = ""
         # Only adopt the parsed people as community when we don't already have a
         # specific one (empty or the generic Duke provenance placeholder).
-        new_community = r["community"] or ""
         if people and new_community in ("", DUKE_PROVENANCE):
             new_community = people
         if new_country != (r["country"] or "") or new_community != (r["community"] or ""):
