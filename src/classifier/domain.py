@@ -6,8 +6,10 @@
 # researcher stats view.
 
 from src.utils.config import config
+from src.utils.lexicons import load_keyword_map
 
-_DOMAIN_KEYWORDS = {
+# Frozen fallback; the authoritative map lives in data/lexicons/domain_keywords.json.
+_DOMAIN_KEYWORDS_FALLBACK = {
     "medicinal": ["wound", "fever", "infection", "antifungal", "antibacterial",
                   "anti-inflammatory", "antiviral", "antimalarial", "remedy",
                   "treatment", "disease", "therapeutic", "medicine", "ailment",
@@ -21,12 +23,20 @@ _DOMAIN_KEYWORDS = {
                  "moisturizer", "complexion", "anti-aging", "lotion", "soap"],
 }
 
+_DOMAIN_KEYWORDS = load_keyword_map("domain_keywords", _DOMAIN_KEYWORDS_FALLBACK)
+
 
 def infer_domain(text: str, ipc_codes: str | list[str] = "") -> str:
     """
     Return the best-matching domain. IPC/CPC prefix match (config.DOMAIN_IPC_GROUPS)
-    takes precedence; otherwise fall back to keyword scoring. Defaults to
-    'medicinal' when nothing matches (the project's core domain).
+    takes precedence; otherwise fall back to keyword scoring.
+
+    DEFAULT BEHAVIOUR: when neither the IPC codes nor any keyword matches, this
+    returns "medicinal" — the project's core domain and the most common case for
+    TK. This is a deliberate bias, not "unknown": it means an unclassifiable
+    entry is counted as medicinal in the researcher stats. If you need to
+    distinguish "couldn't classify" from "is medicinal", add an explicit
+    "unclassified" branch here and a corresponding domain bucket.
     """
     codes = ipc_codes if isinstance(ipc_codes, list) else [ipc_codes]
     codes = [c.upper() for c in codes if c]

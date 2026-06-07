@@ -4,6 +4,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { SLOW_TIMEOUT_MS, apiDelete, apiGet, apiPost } from "./client";
+import { HEALTH_REFETCH_MS } from "@/config";
 import type {
   AnalyzeBody,
   AnalyzeResult,
@@ -36,7 +37,7 @@ export function useHealth() {
   return useQuery({
     queryKey: qk.health,
     queryFn: () => apiGet<Health>("/api/health"),
-    refetchInterval: 15_000,
+    refetchInterval: HEALTH_REFETCH_MS,
   });
 }
 

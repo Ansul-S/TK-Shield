@@ -46,8 +46,10 @@ def get_engine() -> HybridSearchEngine:
     csv_path = str(config.PATENTS_CSV)
     if not config.PATENTS_CSV.exists():
         raise RuntimeError(
-            f"Patent corpus not found at {csv_path}. Run the ingestion pipeline first: "
-            "python -m src.ingestion.patent_scraper && python -m src.ingestion.ingest_to_chromadb"
+            f"Patent corpus not found at {csv_path}. Build it first: "
+            "python -m src.ingestion.build_corpus && "
+            "python -m src.ingestion.ingest_to_chromadb && "
+            "python -m src.ingestion.seed_landmark_cases"
         )
     patents = load_patents_from_csv(csv_path)
     logger.info(f"Hybrid engine built from {len(patents)} patents")

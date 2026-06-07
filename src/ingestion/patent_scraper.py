@@ -77,10 +77,10 @@ def clean_patent(raw: dict, idx: int) -> dict | None:
         "metadata": {
             "patent_id":   f"PAT-{idx:07d}",
             "title":       title,
-            "abstract":    text[:500],
+            "abstract":    text[:config.ABSTRACT_MAX_CHARS],
             "assignee":    "Unknown",
             "filing_date": "",
-            "country":     "US",
+            "country":     config.DEFAULT_PATENT_COUNTRY,
             "ipc_code":    ipc_section,
             "source":      "ccdv-patent-classification",
             "status":      "GRANTED"

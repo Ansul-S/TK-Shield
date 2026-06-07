@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { LOADING_STAGE_MS } from "@/config";
 import { Spinner } from "./Spinner";
 
 // Staged progress for the slow /report and /novelty calls (15–45s). The backend
@@ -8,7 +9,7 @@ import { Spinner } from "./Spinner";
 // looking frozen. The persona passes wire this to the in-flight mutation state.
 export function LoadingStages({
   stages,
-  stepMs = 6000,
+  stepMs = LOADING_STAGE_MS,
 }: {
   stages: string[];
   stepMs?: number;

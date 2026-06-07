@@ -5,17 +5,22 @@ import nltk
 from nltk.corpus import stopwords
 import re
 
-# Load spaCy's English model
-nlp = spacy.load("en_core_web_sm")
+from src.utils.config import config
+from src.utils.lexicons import load_set
+
+# Load the configured spaCy model (English by default).
+nlp = spacy.load(config.SPACY_MODEL)
 
 # Load English stopwords from NLTK
 STOPWORDS = set(stopwords.words("english"))
 
-# Extra stopwords specific to legal/patent language
-LEGAL_STOPWORDS = {
+# Extra stopwords for legal/patent language. Authoritative list in
+# data/lexicons/stopwords_legal.json; this is the frozen fallback.
+_LEGAL_STOPWORDS_FALLBACK = {
     "wherein", "hereby", "thereof", "herein", "whereas",
     "comprising", "consisting", "said", "claim", "claims"
 }
+LEGAL_STOPWORDS = load_set("stopwords_legal", _LEGAL_STOPWORDS_FALLBACK)
 
 # Combine both sets
 ALL_STOPWORDS = STOPWORDS.union(LEGAL_STOPWORDS)

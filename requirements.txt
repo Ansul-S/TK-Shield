@@ -19,6 +19,11 @@ nltk==3.9.4
 # spaCy English model — install separately:
 #   python -m spacy download en_core_web_sm
 
+# --- Reference data ---
+# ISO country names for the community-attribution stoplist (duke_importer).
+# Optional at runtime: a built-in fallback list is used if it is absent.
+pycountry==26.2.16
+
 # --- Data / ingestion ---
 pandas==3.0.2
 tqdm==4.67.3

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { SEARCH_DEBOUNCE_MS } from "@/config";
 
 // Debounced search input. Owns its text locally and emits the trimmed query
 // after a pause so list refetches don't fire on every keystroke.
 export function SearchBox({
   placeholder,
   onSearch,
-  delay = 250,
+  delay = SEARCH_DEBOUNCE_MS,
   label = "Search",
 }: {
   placeholder?: string;

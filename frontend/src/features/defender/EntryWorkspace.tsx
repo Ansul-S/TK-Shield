@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useAnalyze, useMonitor, useReport, useTkEntry } from "@/api/hooks";
 import { apiPostText } from "@/api/client";
+import { DEFAULT_RESULT_COUNTS } from "@/config";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { SectionHeader } from "@/components/SectionHeader";
@@ -48,7 +49,8 @@ export function EntryWorkspace({ tkId }: { tkId: string }) {
     return <ErrorState error={entry.error} onRetry={() => entry.refetch()} />;
 
   const e = entry.data;
-  const body = { tk_id: tkId, n_results: 5 };
+  // analyze + report share this body; both default to the same result count.
+  const body = { tk_id: tkId, n_results: DEFAULT_RESULT_COUNTS.analyze };
 
   async function exportMarkdown() {
     setExporting(true);
@@ -139,7 +141,7 @@ export function EntryWorkspace({ tkId }: { tkId: string }) {
           variant="secondary"
           onClick={() => {
             setView("monitor");
-            monitor.mutate({ tk_id: tkId, n_results: 10 });
+            monitor.mutate({ tk_id: tkId, n_results: DEFAULT_RESULT_COUNTS.monitor });
           }}
         >
           <Radar className="h-4 w-4" strokeWidth={1.75} />

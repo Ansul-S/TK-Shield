@@ -7,11 +7,14 @@ from loguru import logger
 from pathlib import Path
 from tqdm import tqdm
 from src.utils.config import config
+from src.utils.lexicons import load_list
 
 # ── Better TK relevance filter ────────────────────────────────
-# These are highly specific TK/bio-piracy terms
-# Much stricter than the keyword list in scraper
-STRICT_TK_KEYWORDS = [
+# Highly specific TK/bio-piracy terms (much stricter than the scraper list).
+# Authoritative list: data/lexicons/strict_tk_keywords.json; the block below is
+# the frozen fallback. NOTE: this filter governs which CSV rows are indexed, so
+# changing it changes the corpus — re-run ingest_to_chromadb after editing.
+_STRICT_TK_KEYWORDS_FALLBACK = [
     # Plants and botanicals
     "plant extract", "herbal", "botanical", "medicinal plant",
     "plant material", "plant species", "plant variety",
@@ -40,6 +43,9 @@ STRICT_TK_KEYWORDS = [
     "traditional crop", "indigenous crop",
     "genetic resource", "biodiversity"
 ]
+
+# Authoritative strict-filter keywords (JSON), frozen fallback above.
+STRICT_TK_KEYWORDS = load_list("strict_tk_keywords", _STRICT_TK_KEYWORDS_FALLBACK)
 
 
 def is_strictly_tk_relevant(text: str) -> bool:
@@ -87,11 +93,11 @@ def load_patents_from_csv(csv_path: str) -> list[dict]:
             "text": text,
             "metadata": {
                 "patent_id":   _s(row.get("patent_id", "")),
-                "title":       _s(row.get("title", ""))[:200],
-                "abstract":    _s(row.get("abstract", ""))[:500],
+                "title":       _s(row.get("title", ""))[:config.TITLE_MAX_CHARS],
+                "abstract":    _s(row.get("abstract", ""))[:config.ABSTRACT_MAX_CHARS],
                 "assignee":    _s(row.get("assignee", "Unknown")) or "Unknown",
                 "filing_date": _s(row.get("filing_date", "")),
-                "country":     _s(row.get("country", "US")) or "US",
+                "country":     _s(row.get("country", config.DEFAULT_PATENT_COUNTRY)) or config.DEFAULT_PATENT_COUNTRY,
                 "ipc_code":    _s(row.get("ipc_code", "")),
                 "source":      _s(row.get("source", "")),
                 "status":      _s(row.get("status", "UNKNOWN")) or "UNKNOWN",
@@ -126,7 +132,7 @@ def embed_and_store(patents: list[dict], batch_size: int | None = None,
             pass
 
     collection = client.get_or_create_collection(
-        name=collection_name, metadata={"hnsw:space": "cosine"}
+        name=collection_name, metadata={"hnsw:space": config.CHROMA_DISTANCE}
     )
 
     if not rebuild:
