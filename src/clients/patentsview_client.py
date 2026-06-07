@@ -89,7 +89,7 @@ def _normalize_patent(p: dict) -> dict:
             "abstract": abstract[:config.ABSTRACT_MAX_CHARS],
             "assignee": assignee or "Unknown",
             "filing_date": p.get("patent_date", ""),
-            "country": "US",
+            "country": config.DEFAULT_PATENT_COUNTRY,
             "ipc_code": cpc_code,
             "source": "patentsview",
             "status": "GRANTED",

@@ -80,7 +80,7 @@ def clean_patent(raw: dict, idx: int) -> dict | None:
             "abstract":    text[:config.ABSTRACT_MAX_CHARS],
             "assignee":    "Unknown",
             "filing_date": "",
-            "country":     "US",
+            "country":     config.DEFAULT_PATENT_COUNTRY,
             "ipc_code":    ipc_section,
             "source":      "ccdv-patent-classification",
             "status":      "GRANTED"

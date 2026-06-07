@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Scale, Search } from "lucide-react";
 import { useNovelty } from "@/api/hooks";
+import { DEFAULT_RESULT_COUNTS, MIN_QUERY_LENGTH } from "@/config";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { SectionHeader } from "@/components/SectionHeader";
@@ -12,7 +13,6 @@ import { Markdown } from "@/lib/markdown";
 import { dash } from "@/lib/format";
 import { VerdictBadge } from "./VerdictBadge";
 
-const MIN_LEN = 20;
 const STAGES = [
   "Searching the documented TK registry",
   "Ranking prior-art matches",
@@ -25,11 +25,11 @@ const STAGES = [
 export function ExaminerPage() {
   const novelty = useNovelty();
   const [text, setText] = useState("");
-  const tooShort = text.trim().length > 0 && text.trim().length < MIN_LEN;
+  const tooShort = text.trim().length > 0 && text.trim().length < MIN_QUERY_LENGTH;
 
   function check() {
-    if (text.trim().length < MIN_LEN) return;
-    novelty.mutate({ patent_text: text.trim(), n_results: 5 });
+    if (text.trim().length < MIN_QUERY_LENGTH) return;
+    novelty.mutate({ patent_text: text.trim(), n_results: DEFAULT_RESULT_COUNTS.novelty });
   }
 
   return (
@@ -59,7 +59,7 @@ export function ExaminerPage() {
         </Button>
         {tooShort && (
           <span className="text-xs text-error">
-            Add more text — at least {MIN_LEN} characters for a meaningful check.
+            Add more text — at least {MIN_QUERY_LENGTH} characters for a meaningful check.
           </span>
         )}
       </div>

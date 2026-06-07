@@ -64,7 +64,10 @@ class Config:
     TK_COLLECTION      = os.getenv("TK_COLLECTION", "tk_entries")
     # HNSW distance metric for every collection. "cosine" pairs with the
     # normalized embeddings (similarity = 1 - distance). Set once here so the
-    # vector store, ingest and seed scripts can't drift.
+    # vector store, ingest and seed scripts can't drift. NOTE: ChromaDB fixes a
+    # collection's metric at creation time and ignores this for an already-built
+    # collection — changing it only affects NEWLY-created collections (rebuild to
+    # apply).
     CHROMA_DISTANCE  = os.getenv("CHROMA_DISTANCE", "cosine")
 
     # ── NLP ─────────────────────────────────────────────────
@@ -101,6 +104,18 @@ class Config:
     #                       indexed source (build_corpus fails fast if you try).
     PATENT_SOURCE    = os.getenv("PATENT_SOURCE", "patentsview_bulk")
     MAX_PATENTS      = int(os.getenv("MAX_PATENTS", "5000"))
+
+    # ── Jurisdiction defaults ───────────────────────────────
+    # The bundled patent sources (PatentsView bulk/live, ccdv) are US patents, so
+    # these default to "US": DEFAULT_PATENT_COUNTRY is the `country` assigned to a
+    # source row that doesn't carry one (and to PatentsView rows), and
+    # DEFAULT_JURISDICTION is the 2-letter prefix prepended to bare numeric patent
+    # ids (PatentsView bulk ids lack a country prefix → "US5401504").
+    # MIGRATION NOTE: only change these alongside a genuinely non-US source —
+    # changing them while still ingesting US data would mislabel that data. The
+    # kind-code dedup assumes a ≤2-letter jurisdiction prefix.
+    DEFAULT_PATENT_COUNTRY = os.getenv("DEFAULT_PATENT_COUNTRY", "US")
+    DEFAULT_JURISDICTION   = os.getenv("DEFAULT_JURISDICTION", "US")
 
     # PatentsView bulk (keyless public files; no API key/registration).
     PATENTSVIEW_BULK_BASE = os.getenv(
@@ -232,7 +247,9 @@ class Config:
         Building the indexed corpus from a source that is then excluded at index
         time (EXCLUDE_PATENT_SOURCES) yields an empty index — a silent footgun.
         `source` defaults to PATENT_SOURCE; pass the resolved source when it may
-        be overridden. Raises ValueError with a clear remedy.
+        be overridden. Matching is by substring (consistent with how
+        load_patents_from_csv applies EXCLUDE_PATENT_SOURCES). Raises ValueError
+        with a clear remedy.
         """
         resolved = source or self.PATENT_SOURCE
         src = (resolved or "").lower()

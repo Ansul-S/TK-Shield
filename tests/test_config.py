@@ -49,3 +49,9 @@ def test_promoted_defaults_match_prior_literals():
     assert config.TITLE_MAX_CHARS == 200
     assert config.ABSTRACT_MAX_CHARS == 500
     assert config.PATENT_TEXT_MAX_CHARS == 1500
+
+
+def test_jurisdiction_defaults_preserve_us():
+    # Tier 3: bundled sources are US; defaults must keep prior behaviour.
+    assert config.DEFAULT_PATENT_COUNTRY == "US"
+    assert config.DEFAULT_JURISDICTION == "US"

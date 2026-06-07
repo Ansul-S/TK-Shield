@@ -79,15 +79,15 @@ def patents_from_frame(df: pd.DataFrame) -> list[dict]:
         if not pid or not title:
             continue
         out.append({
-            "id": f"US{pid}",
+            "id": f"{config.DEFAULT_JURISDICTION}{pid}",
             "text": f"{title}. {abstract}".strip(),
             "metadata": {
-                "patent_id": f"US{pid}",
+                "patent_id": f"{config.DEFAULT_JURISDICTION}{pid}",
                 "title": title[:config.TITLE_MAX_CHARS],
                 "abstract": abstract[:config.ABSTRACT_MAX_CHARS],
                 "assignee": "Unknown",
                 "filing_date": str(row.get(date_c, "") or ""),
-                "country": "US",
+                "country": config.DEFAULT_PATENT_COUNTRY,
                 "ipc_code": "",
                 "source": "patentsview-bulk",
                 "status": "GRANTED",
@@ -126,7 +126,8 @@ def iter_patents(limit: int) -> Iterator[dict]:
     if config.BULK_ENRICH_ASSIGNEE and kept:
         apath = _ensure_file(_G_ASSIGNEE)
         if apath is not None:
-            raw_ids = {p["id"][2:] for p in kept}  # strip the "US" prefix
+            _plen = len(config.DEFAULT_JURISDICTION)
+            raw_ids = {p["id"][_plen:] for p in kept}  # strip the jurisdiction prefix
             amap: dict[str, str] = {}
             for chunk in pd.read_csv(apath, sep="\t", compression="zip", dtype=str,
                                      chunksize=_CHUNK, on_bad_lines="skip"):

@@ -97,7 +97,7 @@ def load_patents_from_csv(csv_path: str) -> list[dict]:
                 "abstract":    _s(row.get("abstract", ""))[:config.ABSTRACT_MAX_CHARS],
                 "assignee":    _s(row.get("assignee", "Unknown")) or "Unknown",
                 "filing_date": _s(row.get("filing_date", "")),
-                "country":     _s(row.get("country", "US")) or "US",
+                "country":     _s(row.get("country", config.DEFAULT_PATENT_COUNTRY)) or config.DEFAULT_PATENT_COUNTRY,
                 "ipc_code":    _s(row.get("ipc_code", "")),
                 "source":      _s(row.get("source", "")),
                 "status":      _s(row.get("status", "UNKNOWN")) or "UNKNOWN",
