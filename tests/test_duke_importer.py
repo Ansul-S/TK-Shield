@@ -49,6 +49,40 @@ def test_is_not_a_people():
     assert duke.is_not_a_people("Aztec") is False
 
 
+def test_all_legacy_countries_still_stoplisted():
+    # Regression guard for the pycountry migration: every country that was
+    # stoplisted by the prior hardcoded set must still be stoplisted (whether via
+    # pycountry or the alias supplement) — no Duke label may regress.
+    for country in duke._FALLBACK_COUNTRIES:
+        assert duke.is_not_a_people(country), country
+
+
+def test_pycountry_extends_coverage():
+    # Countries pycountry knows that the old hand-list omitted are now caught.
+    for c in ("Kazakhstan", "Uzbekistan", "Botswana", "Mali"):
+        assert duke.is_not_a_people(c), c
+
+
+def test_country_fallback_used_when_pycountry_missing():
+    # When pycountry can't be imported, the built-in fallback list is returned,
+    # preserving prior behaviour.
+    import builtins
+    real_import = builtins.__import__
+
+    def _no_pycountry(name, *a, **k):
+        if name == "pycountry":
+            raise ImportError("simulated missing pycountry")
+        return real_import(name, *a, **k)
+
+    builtins.__import__ = _no_pycountry
+    try:
+        names = duke._country_names()
+    finally:
+        builtins.__import__ = real_import
+    assert "INDIA" in names and "CHINA" in names           # fallback populated
+    assert names == set(duke._FALLBACK_COUNTRIES)
+
+
 def test_country_parenthetical_becomes_community():
     # INDIA(SANTAL) must consolidate the country to INDIA and attribute Santal.
     df = pd.DataFrame({

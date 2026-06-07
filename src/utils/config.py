@@ -71,6 +71,11 @@ class Config:
     # spaCy model used by the NER extractor + preprocessor (English-first).
     # Override to swap models (e.g. a larger or multilingual pipeline).
     SPACY_MODEL      = os.getenv("SPACY_MODEL", "en_core_web_sm")
+    # Directory of versioned lexicon JSON files (plant names, medical uses,
+    # domain keywords, strict TK keywords, legal stopwords, …). These are the
+    # AUTHORITATIVE source loaded at startup; each consumer keeps a frozen
+    # in-code fallback so the pipeline still runs if a file is missing.
+    LEXICON_DIR      = os.getenv("LEXICON_DIR", "data/lexicons")
 
     # ── Search ──────────────────────────────────────────────
     EMBEDDING_MODEL  = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")

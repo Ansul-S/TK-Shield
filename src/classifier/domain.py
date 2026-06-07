@@ -6,8 +6,10 @@
 # researcher stats view.
 
 from src.utils.config import config
+from src.utils.lexicons import load_keyword_map
 
-_DOMAIN_KEYWORDS = {
+# Frozen fallback; the authoritative map lives in data/lexicons/domain_keywords.json.
+_DOMAIN_KEYWORDS_FALLBACK = {
     "medicinal": ["wound", "fever", "infection", "antifungal", "antibacterial",
                   "anti-inflammatory", "antiviral", "antimalarial", "remedy",
                   "treatment", "disease", "therapeutic", "medicine", "ailment",
@@ -20,6 +22,8 @@ _DOMAIN_KEYWORDS = {
     "cosmetic": ["cosmetic", "skincare", "hair", "fragrance", "perfume", "beauty",
                  "moisturizer", "complexion", "anti-aging", "lotion", "soap"],
 }
+
+_DOMAIN_KEYWORDS = load_keyword_map("domain_keywords", _DOMAIN_KEYWORDS_FALLBACK)
 
 
 def infer_domain(text: str, ipc_codes: str | list[str] = "") -> str:
