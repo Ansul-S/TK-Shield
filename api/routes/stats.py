@@ -7,12 +7,11 @@ import chromadb
 from fastapi import APIRouter
 
 from src.classifier.domain import infer_domain
+from src.ingestion.tk_sources.duke_importer import DUKE_PROVENANCE
 from src.registry import tk_store
 from src.utils.config import config
 
 router = APIRouter(prefix="/api/stats", tags=["researcher"])
-
-_PATENT_SAMPLE = 5000  # cap metadata scan so it stays fast on large corpora
 
 
 @router.get("")
@@ -26,7 +25,7 @@ def stats() -> dict:
     tk_by_community = Counter(
         c for e in entries
         if (c := (e.get("community") or "").strip())
-        and c != "Documented ethnobotany (Dr. Duke, USDA)"
+        and c != DUKE_PROVENANCE
     )
 
     # --- Patent corpus (from ChromaDB) ---
@@ -40,7 +39,7 @@ def stats() -> dict:
             config.PATENTS_COLLECTION
         )
         patent_total = col.count()
-        metas = col.get(include=["metadatas"], limit=_PATENT_SAMPLE).get("metadatas", [])
+        metas = col.get(include=["metadatas"], limit=config.STATS_PATENT_SAMPLE).get("metadatas", [])
         sampled = len(metas)
         for m in metas:
             by_assignee[m.get("assignee", "Unknown") or "Unknown"] += 1

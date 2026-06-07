@@ -2,7 +2,9 @@
 
 import spacy
 
-nlp = spacy.load("en_core_web_sm")
+from src.utils.config import config
+
+nlp = spacy.load(config.SPACY_MODEL)
 
 # ── Custom TK Domain Knowledge ──────────────────────────────
 # These are dictionaries of terms we teach the system

@@ -18,7 +18,7 @@ def get_or_create_collection(name: str):
     """
     collection = client.get_or_create_collection(
         name=name,
-        metadata={"hnsw:space": "cosine"}  # Use cosine similarity for comparisons
+        metadata={"hnsw:space": config.CHROMA_DISTANCE}  # distance metric from config
     )
     return collection
 

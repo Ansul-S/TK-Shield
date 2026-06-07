@@ -5,8 +5,10 @@ import nltk
 from nltk.corpus import stopwords
 import re
 
-# Load spaCy's English model
-nlp = spacy.load("en_core_web_sm")
+from src.utils.config import config
+
+# Load the configured spaCy model (English by default).
+nlp = spacy.load(config.SPACY_MODEL)
 
 # Load English stopwords from NLTK
 STOPWORDS = set(stopwords.words("english"))

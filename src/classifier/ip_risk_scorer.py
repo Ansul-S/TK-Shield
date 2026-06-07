@@ -13,9 +13,9 @@
 #     contributes 0, not a "assume risk" default. We score evidence, not gaps.
 
 import re
-from datetime import datetime
 
 from src.utils.config import config
+from src.utils.dates import parse_date
 
 # Word-boundary patterns so "inc" doesn't match "Cincinnati" etc.
 _CORP_RE = re.compile(
@@ -54,25 +54,19 @@ def calc_similarity_risk(search_results: list) -> int:
 
 def calc_temporal_risk(tk_entry: dict, search_results: list) -> int:
     """Factor 2 — was a candidate patent filed AFTER the TK was documented?
-    (cap: RISK_WEIGHT_TEMPORAL). Unknown/invalid TK date → 0 (no assumption)."""
+    (cap: RISK_WEIGHT_TEMPORAL). Dates are parsed tolerantly (YYYY, YYYY-MM,
+    YYYY-MM-DD, ISO timestamps); an unknown/unparseable TK date → 0 (no
+    assumption)."""
     if not search_results:
         return 0
-    tk_date_str = (tk_entry.get("documentation_date") or "").strip()
-    if not tk_date_str:
-        return 0
-    try:
-        tk_date = datetime.strptime(tk_date_str, "%Y-%m-%d")
-    except ValueError:
+    tk_date = parse_date(tk_entry.get("documentation_date"))
+    if tk_date is None:
         return 0
 
     inten = 0.0
-    for result in search_results[:3]:
-        patent_date_str = (result.get("metadata", {}).get("filing_date") or "").strip()
-        if not patent_date_str:
-            continue
-        try:
-            patent_date = datetime.strptime(patent_date_str, "%Y-%m-%d")
-        except ValueError:
+    for result in search_results[:config.RISK_TOP_N_CONSIDERED]:
+        patent_date = parse_date(result.get("metadata", {}).get("filing_date"))
+        if patent_date is None:
             continue
         if patent_date > tk_date:
             years_gap = (patent_date - tk_date).days / 365
@@ -95,7 +89,7 @@ def calc_geographic_risk(tk_entry: dict, search_results: list) -> int:
         return 0
 
     foreign = total = 0
-    for result in search_results[:3]:
+    for result in search_results[:config.RISK_TOP_N_CONSIDERED]:
         patent_country = (result.get("metadata", {}).get("country") or "").upper()
         if patent_country:
             total += 1
@@ -123,7 +117,7 @@ def calc_assignee_risk(search_results: list) -> int:
     if not search_results:
         return 0
     inten = 0.0
-    for result in search_results[:3]:
+    for result in search_results[:config.RISK_TOP_N_CONSIDERED]:
         assignee = (result.get("metadata", {}).get("assignee") or "").lower().strip()
         if not assignee or assignee == "unknown":
             continue
@@ -142,7 +136,7 @@ def calc_ipc_risk(search_results: list) -> int:
     class? (cap: RISK_WEIGHT_IPC). No match / no data → 0."""
     if not search_results:
         return 0
-    for result in search_results[:3]:
+    for result in search_results[:config.RISK_TOP_N_CONSIDERED]:
         ipc = (result.get("metadata", {}).get("ipc_code") or "").strip()
         if not ipc:
             continue

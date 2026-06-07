@@ -83,8 +83,8 @@ def patents_from_frame(df: pd.DataFrame) -> list[dict]:
             "text": f"{title}. {abstract}".strip(),
             "metadata": {
                 "patent_id": f"US{pid}",
-                "title": title[:200],
-                "abstract": abstract[:500],
+                "title": title[:config.TITLE_MAX_CHARS],
+                "abstract": abstract[:config.ABSTRACT_MAX_CHARS],
                 "assignee": "Unknown",
                 "filing_date": str(row.get(date_c, "") or ""),
                 "country": "US",

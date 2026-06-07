@@ -85,8 +85,8 @@ def _normalize_patent(p: dict) -> dict:
         "text": f"{title}. {abstract}".strip(),
         "metadata": {
             "patent_id": pid,
-            "title": title[:200],
-            "abstract": abstract[:500],
+            "title": title[:config.TITLE_MAX_CHARS],
+            "abstract": abstract[:config.ABSTRACT_MAX_CHARS],
             "assignee": assignee or "Unknown",
             "filing_date": p.get("patent_date", ""),
             "country": "US",

@@ -78,3 +78,36 @@ def test_assignee_word_boundary_avoids_false_corp_match():
     tk = {"country": "IN", "documentation_date": "1990-01-01"}
     hit = [_patent(0.9, assignee="City of Cincinnati", filing_date="1999-01-01", country="US")]
     assert score_risk(tk, hit)["factors"]["assignee_risk"] == 0
+
+
+def test_temporal_accepts_non_iso_dates():
+    # A2: year-only / year-month dates now score temporally (previously the
+    # strict %Y-%m-%d parse returned 0 for these real-world formats).
+    tk = {"country": "IN", "documentation_date": "1900"}          # year only
+    hit = [_patent(0.9, filing_date="1994", country="US")]        # year only, >50y later
+    assert score_risk(tk, hit)["factors"]["temporal_risk"] == 20  # max temporal band
+
+    tk2 = {"country": "IN", "documentation_date": "1985-06"}      # year-month
+    hit2 = [_patent(0.9, filing_date="2001-03-15", country="US")] # ~16y later → mid band
+    assert score_risk(tk2, hit2)["factors"]["temporal_risk"] == 15
+
+
+def test_temporal_unparseable_date_scores_zero():
+    # Junk/empty documentation dates contribute nothing (no "assume risk").
+    for bad in ("", "circa 1900", "unknown"):
+        tk = {"country": "IN", "documentation_date": bad}
+        hit = [_patent(0.9, filing_date="1994-01-01", country="US")]
+        assert score_risk(tk, hit)["factors"]["temporal_risk"] == 0
+
+
+def test_risk_top_n_considered_is_respected(monkeypatch):
+    # The aggravating factors inspect only the top-N hits. With N=1, a risky
+    # assignee in position 2 must be ignored. (config promotion behavioural)
+    import src.classifier.ip_risk_scorer as scorer
+    monkeypatch.setattr(scorer.config, "RISK_TOP_N_CONSIDERED", 1)
+    tk = {"country": "IN", "documentation_date": "1900-01-01"}
+    hits = [
+        _patent(0.9, assignee="Jane Doe", filing_date="1994-01-01", country="US"),
+        _patent(0.88, assignee="Monsanto", filing_date="1994-01-01", country="US"),
+    ]
+    assert score_risk(tk, hits)["factors"]["assignee_risk"] == 0  # Monsanto not in top-1

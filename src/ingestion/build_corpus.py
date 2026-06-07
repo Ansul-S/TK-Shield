@@ -27,6 +27,9 @@ def _flatten(patent: dict) -> dict:
 def build_corpus(source_name: str | None = None, limit: int | None = None) -> pd.DataFrame:
     source_name = source_name or config.PATENT_SOURCE
     limit = limit or config.MAX_PATENTS
+    # Fail fast: a source that is excluded at index time would build a corpus
+    # that ingest_to_chromadb then drops entirely (empty index footgun, A1).
+    config.validate_corpus_config(source_name)
     iter_patents = get_patent_source(source_name)
 
     rows = [_flatten(p) for p in iter_patents(limit)]
