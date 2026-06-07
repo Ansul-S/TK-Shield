@@ -12,16 +12,17 @@ Given a documented practice, TK-Shield finds the patents that may claim it, scor
 
 ## The result, first
 
-The three landmark bio-piracy disputes — **turmeric** (`US5401504A`), **neem** (`EP0436257B1`), and **basmati** (`US5663484A`) — were each historically revoked using documented prior art. TK-Shield was evaluated on whether it can independently re-identify them from **folk-worded TK descriptions that share no text with the patents**:
+The three landmark bio-piracy disputes — **turmeric** (`US5401504A`), **neem** (`EP0436257B1`), and **basmati** (`US5663484A`) — were each historically revoked using documented prior art. TK-Shield was evaluated on whether it can independently re-identify them from **independently-authored, folk-worded TK descriptions** — different sentences from the patents, though sharing the plant/use terms a real registrant would naturally use:
 
 | Metric | Result |
 |---|---|
 | Correct patent retrieved in the top 5 (**Precision@5**) | **100 %** |
-| Correct patent ranked #1 (**Precision@1**) | **67 %** |
-| Mean Reciprocal Rank | **0.833** |
+| Correct patent ranked #1 (**Precision@1**) | **100 %** |
+| Mean Reciprocal Rank | **1.000** |
 | Cases scored **HIGH / CRITICAL** risk | **100 %** |
+| Benign control practices flagged (**false-positive rate**) | **0 %** |
 
-All three were flagged **CRITICAL** and retrieved as the closest or second-closest match, from a corpus of **16,371 real US patents**. Reproduce it:
+All three were flagged **CRITICAL** and retrieved as the closest match, from a corpus of **16,292 real US patents**; three benign control practices were correctly left at MINIMAL risk. An **ablation** (BM25-only vs semantic-only vs hybrid) and the controls are written into the report — note that on these canonical cases the shared plant terms let keyword search alone already rank the target, so hybrid's added value is for synonym/multilingual queries these descriptions don't stress. This is a small demonstration on canonical cases, not a population-scale benchmark. Reproduce it:
 
 ```bash
 PYTHONPATH=. python -m src.evaluation.landmark_eval   # writes docs/evaluation_report.md
@@ -66,10 +67,10 @@ flowchart LR
 
 ## At a glance
 
-- **16,371** real US patents (PatentsView bulk — real titles, assignees, grant dates)
+- **16,292** real US patents (PatentsView bulk — real titles, assignees, grant dates)
 - **2,030** documented TK practices (Dr. Duke CC0 ethnobotany + curated multilingual Wikidata)
 - **Keyless** end-to-end · **offline-first** · **no runtime CDN** · local LLM optional
-- Backend: **48** network-free tests · Frontend: **21** tests (incl. XSS-safety regressions)
+- Backend: **58** network-free tests · Frontend: **21** tests (incl. XSS-safety regressions)
 
 ---
 
@@ -130,7 +131,7 @@ misappropriation.** Known limits:
 - **Language** — analysis is English-centric; multilingual TK names are matched but the pipeline is English-first.
 - **Model** — the local LLM is small (`llama3.2`, ~3B); narrative quality is below frontier API models — a deliberate keyless/offline trade-off, with an exact deterministic fallback.
 - **Risk model** — interpretable hand-weighted factors, not learned from a labelled dataset.
-- **Evaluation** — demonstrated on the three landmark cases; not yet a large labelled benchmark, so no population-level false-positive rate.
+- **Evaluation** — demonstrated on the three landmark cases plus three benign controls (0% false positives) and a retrieval ablation; this is a small canonical-case demonstration, **not** a population-scale labelled benchmark with precision/recall measured across many patents and phrasings.
 - **Data** — the ethnobotany source is broad but skews to English-documented knowledge, under-representing some communities.
 - **Deployment** — hardened for local/single-user; **no authentication, rate limiting, or restricted CORS** — the gating items for any public hosting.
 

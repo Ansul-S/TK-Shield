@@ -4,7 +4,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
-from api.deps import get_engine, get_llm_client, resolve_entry
+from api.deps import LLMBusy, get_engine, get_llm_client, llm_slot, resolve_entry
 from api.schemas import AnalyzeIn
 from src.rag import retriever, report_generator
 from src.report import renderer
@@ -27,13 +27,19 @@ def _build(req: AnalyzeIn) -> dict:
 @router.post("")
 def make_report(req: AnalyzeIn, format: str = Query("json", pattern="^(json|markdown|pdf)$")) -> Response:
     try:
-        report = _build(req)
+        with llm_slot():  # bound concurrent expensive requests
+            report = _build(req)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except LLMBusy as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
     if format == "markdown":
         return PlainTextResponse(renderer.to_markdown(report), media_type="text/markdown")
     if format == "pdf":
-        return Response(renderer.to_pdf(report), media_type="application/pdf")
+        try:
+            return Response(renderer.to_pdf(report), media_type="application/pdf")
+        except Exception as e:  # noqa: BLE001 — reportlab/markup issues shouldn't 500 silently
+            raise HTTPException(status_code=500, detail=f"PDF rendering failed: {e}")
     # default json — include rendered markdown for convenience
     return JSONResponse({**report, "markdown": renderer.to_markdown(report)})

@@ -65,6 +65,14 @@ def to_markdown(report: dict) -> str:
         lines += ["", f"> ⚠️ Sources unavailable this run: {', '.join(report['sources_skipped'])}."]
     if not report.get("llm_used"):
         lines += ["", "> ℹ️ Narrative generated offline (LLM unavailable); figures and citations are exact."]
+    if report.get("unverified_citation_refs"):
+        refs = ", ".join(report["unverified_citation_refs"])
+        lines += [
+            "",
+            f"> ⚠️ The AI narrative referenced identifier(s) not in the verified citation "
+            f"list ({refs}). Treat the narrative as a draft and rely on the **Prior-art "
+            f"citations** section above as the authoritative evidence.",
+        ]
 
     return "\n".join(lines)
 

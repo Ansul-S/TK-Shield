@@ -59,6 +59,9 @@ export interface RiskResult {
     assignee_risk: number;
     ipc_risk: number;
   };
+  // True when no credible candidate patent was found, so the aggravating
+  // factors were withheld and risk reflects similarity alone.
+  relevance_gated?: boolean;
   recommendations: string[];
 }
 
@@ -110,6 +113,9 @@ export interface ReportResult {
   assessment: string;
   opposition_draft: string;
   llm_used: boolean;
+  // Identifiers the LLM narrative cited that are NOT in the verified citation
+  // set — surfaced so the narrative is treated as a draft (M3).
+  unverified_citation_refs?: string[];
   sources_skipped: string[];
   markdown: string;
 }

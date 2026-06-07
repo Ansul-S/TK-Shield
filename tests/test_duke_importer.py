@@ -30,6 +30,25 @@ def test_split_geo_extracts_community_and_strips_artifacts():
     assert duke.split_geo("nan") == ("", "")
 
 
+def test_split_geo_does_not_misattribute_country_or_region_as_people():
+    # A parenthetical that is a country/region/religion is NOT a holder people —
+    # it must be dropped, not stored as a community (M2).
+    assert duke.split_geo("INDIA(ASIA)") == ("INDIA", "")
+    assert duke.split_geo("INDIA(INDIA)") == ("INDIA", "")
+    assert duke.split_geo("X(HINDU)") == ("X", "")
+    assert duke.split_geo("X(SOUTH AFRICA)") == ("X", "")
+    # Genuine peoples still pass through.
+    assert duke.split_geo("MEXICO(AZTEC)") == ("MEXICO", "Aztec")
+
+
+def test_is_not_a_people():
+    assert duke.is_not_a_people("India") is True
+    assert duke.is_not_a_people("Asia") is True
+    assert duke.is_not_a_people("Hindu") is True
+    assert duke.is_not_a_people("Santal") is False
+    assert duke.is_not_a_people("Aztec") is False
+
+
 def test_country_parenthetical_becomes_community():
     # INDIA(SANTAL) must consolidate the country to INDIA and attribute Santal.
     df = pd.DataFrame({

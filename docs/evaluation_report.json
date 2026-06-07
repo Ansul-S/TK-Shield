@@ -1,13 +1,15 @@
 {
   "summary": {
     "cases": 3,
-    "precision_at_1": 0.667,
+    "precision_at_1": 1.0,
     "precision_at_5": 1.0,
-    "mrr": 0.833,
+    "mrr": 1.0,
     "flagged_high_or_critical": 1.0,
+    "controls": 3,
+    "control_false_positive_rate": 0.0,
     "n_results": 10,
-    "corpus_size": 16371,
-    "generated_at": "2026-06-06T10:14:12+00:00"
+    "corpus_size": 16292,
+    "generated_at": "2026-06-07T04:21:50+00:00"
   },
   "results": [
     {
@@ -20,12 +22,12 @@
       "top5": true,
       "similarity": 0.823,
       "risk_level": "CRITICAL",
-      "risk_score": 85,
+      "risk_score": 86,
       "factors": {
-        "similarity_score": 33,
+        "similarity_score": 37,
         "temporal_risk": 20,
         "geographic_risk": 15,
-        "assignee_risk": 7,
+        "assignee_risk": 4,
         "ipc_risk": 10
       },
       "flagged": true,
@@ -41,13 +43,13 @@
       "top5": true,
       "similarity": 0.787,
       "risk_level": "CRITICAL",
-      "risk_score": 83,
+      "risk_score": 94,
       "factors": {
-        "similarity_score": 30,
+        "similarity_score": 34,
         "temporal_risk": 20,
         "geographic_risk": 15,
         "assignee_risk": 15,
-        "ipc_risk": 3
+        "ipc_risk": 10
       },
       "flagged": true,
       "top_hit": "EP0436257B1"
@@ -57,10 +59,10 @@
       "expected_patent": "US5663484A",
       "claimant": "RiceTec Inc. (US)",
       "outcome": "Most claims withdrawn/struck at the USPTO in 2001-2002.",
-      "rank": 2,
-      "top1": false,
+      "rank": 1,
+      "top1": true,
       "top5": true,
-      "similarity": 0.606,
+      "similarity": 0.662,
       "risk_level": "CRITICAL",
       "risk_score": 83,
       "factors": {
@@ -72,6 +74,52 @@
       },
       "flagged": true,
       "top_hit": "US5663484"
+    }
+  ],
+  "ablation": [
+    {
+      "case": "Turmeric (Curcuma longa) for wound healing",
+      "rank_bm25": 1,
+      "rank_semantic": 1,
+      "rank_hybrid": 1
+    },
+    {
+      "case": "Neem (Azadirachta indica) as a crop antifungal",
+      "rank_bm25": 1,
+      "rank_semantic": 1,
+      "rank_hybrid": 1
+    },
+    {
+      "case": "Basmati aromatic rice of the Indian subcontinent",
+      "rank_bm25": 1,
+      "rank_semantic": 1,
+      "rank_hybrid": 1
+    }
+  ],
+  "controls": [
+    {
+      "practice_name": "Drinking warm water in the morning",
+      "risk_level": "MINIMAL",
+      "risk_score": 12,
+      "flagged": false,
+      "relevance_gated": true,
+      "matched_landmark": false
+    },
+    {
+      "practice_name": "Afternoon walk for relaxation",
+      "risk_level": "MINIMAL",
+      "risk_score": 9,
+      "flagged": false,
+      "relevance_gated": true,
+      "matched_landmark": false
+    },
+    {
+      "practice_name": "Distributed cloud job scheduler",
+      "risk_level": "MINIMAL",
+      "risk_score": 4,
+      "flagged": false,
+      "relevance_gated": true,
+      "matched_landmark": false
     }
   ]
 }

@@ -1,348 +1,253 @@
 # src/classifier/ip_risk_scorer.py
+#
+# Interpretable 5-factor bio-piracy risk score (0–100). Design principles:
+#   * Weights, band thresholds, the relevance gate and the high-risk
+#     IPC/assignee lists all come from `config` (tunable, not hardcoded).
+#   * The four "aggravating" factors (temporal, geographic, assignee, IPC) only
+#     apply when there is a CREDIBLE candidate patent — i.e. top similarity ≥
+#     `config.RISK_RELEVANCE_GATE`. Below the gate, risk reflects similarity
+#     alone, so a benign practice that only weakly matches the corpus is not
+#     inflated by structural traits (foreign filing, post-dating, corporate
+#     assignee) that are meaningless without a real match.
+#   * Missing data is NOT treated as risk: an unknown date/country/assignee/IPC
+#     contributes 0, not a "assume risk" default. We score evidence, not gaps.
 
+import re
 from datetime import datetime
 
+from src.utils.config import config
 
-# ── Known high-risk patent classification codes ──────────────
-# These IPC codes are categories where bio-piracy most commonly occurs
-HIGH_RISK_IPC_CODES = {
-    "A61K36",  # Medicinal plants
-    "A61K31",  # Organic chemistry medicines (often derived from plants)
-    "A01H5",   # Plant varieties
-    "C12N15",  # Genetic engineering / gene sequences
-    "A23L33",  # Nutritional additives (food TK)
-    "A61P31",  # Antiinfectives — common bio-piracy target
-}
+# Word-boundary patterns so "inc" doesn't match "Cincinnati" etc.
+_CORP_RE = re.compile(
+    r"\b(inc|inc\.|incorporated|corp|corporation|co\.|company|ltd|ltd\.|llc|l\.l\.c\.|gmbh|s\.a\.|plc)\b"
+)
+_ACADEMIC_RE = re.compile(r"\b(universit|institut|college|polytechnic|académie|academy)")
 
-# ── Known corporate assignees with bio-piracy history ────────
-HIGH_RISK_ASSIGNEES = {
-    "w.r. grace", "ricetec", "unilever", "monsanto", "bayer",
-    "syngenta", "dupont", "dow agrosciences", "pfizer",
-    "glaxosmithkline", "novartis", "roche"
-}
+
+def _round(intensity: float, weight: int) -> int:
+    """Scale a 0..1 intensity to an integer point value capped at `weight`."""
+    return int(round(max(0.0, min(1.0, intensity)) * weight))
 
 
 def calc_similarity_risk(search_results: list) -> int:
-    """
-    Factor 1: How similar are the top patents to our TK entry?
-    Max 40 points
+    """Factor 1 — how close is the nearest patent? (cap: RISK_WEIGHT_SIMILARITY)
 
-    Logic:
-    - If top result similarity > 0.85 → very high risk (35-40 pts)
-    - If top result similarity > 0.70 → high risk (25-34 pts)
-    - If top result similarity > 0.50 → medium risk (15-24 pts)
-    - If top result similarity > 0.30 → low risk (5-14 pts)
-    - Below 0.30 → minimal risk (0-4 pts)
+    Continuous, monotonic curve (no discontinuity at 0.85):
+      sim ≥ 0.85 → full;  0.70–0.85 → high;  0.50–0.70 → medium;
+      0.30–0.50 → low;    < 0.30 → minimal.
     """
     if not search_results:
         return 0
-
-    top_score = search_results[0].get("similarity_score", 0)
-
-    if top_score >= 0.85:
-        return 40
-    elif top_score >= 0.70:
-        return int(25 + (top_score - 0.70) / 0.15 * 10)
-    elif top_score >= 0.50:
-        return int(15 + (top_score - 0.50) / 0.20 * 10)
-    elif top_score >= 0.30:
-        return int(5 + (top_score - 0.30) / 0.20 * 10)
+    s = search_results[0].get("similarity_score", 0) or 0
+    if s >= 0.85:
+        inten = 1.0
+    elif s >= 0.70:
+        inten = 0.625 + (s - 0.70) / 0.15 * 0.375
+    elif s >= 0.50:
+        inten = 0.375 + (s - 0.50) / 0.20 * 0.25
+    elif s >= 0.30:
+        inten = 0.125 + (s - 0.30) / 0.20 * 0.25
     else:
-        return int(top_score / 0.30 * 5)
+        inten = (s / 0.30) * 0.125 if s > 0 else 0.0
+    return _round(inten, config.RISK_WEIGHT_SIMILARITY)
 
 
 def calc_temporal_risk(tk_entry: dict, search_results: list) -> int:
-    """
-    Factor 2: Was the patent filed AFTER the TK was documented?
-    Max 20 points
-
-    Why this matters:
-    If TK was documented in 1800s and patent was filed in 1994,
-    the patent has no novelty — it's stealing existing knowledge.
-
-    If TK was documented AFTER the patent, the TK community
-    documented it defensively (less risk from this factor).
-    """
+    """Factor 2 — was a candidate patent filed AFTER the TK was documented?
+    (cap: RISK_WEIGHT_TEMPORAL). Unknown/invalid TK date → 0 (no assumption)."""
     if not search_results:
         return 0
-
-    tk_date_str = tk_entry.get("documentation_date", "")
+    tk_date_str = (tk_entry.get("documentation_date") or "").strip()
     if not tk_date_str:
-        # Unknown TK date — assume risk
-        return 10
-
+        return 0
     try:
         tk_date = datetime.strptime(tk_date_str, "%Y-%m-%d")
     except ValueError:
-        return 10
+        return 0
 
-    risk_points = 0
-
-    for result in search_results[:3]:  # Check top 3 patents
-        patent_date_str = result.get("metadata", {}).get("filing_date", "")
+    inten = 0.0
+    for result in search_results[:3]:
+        patent_date_str = (result.get("metadata", {}).get("filing_date") or "").strip()
         if not patent_date_str:
             continue
-
         try:
             patent_date = datetime.strptime(patent_date_str, "%Y-%m-%d")
         except ValueError:
             continue
-
-        # Patent filed AFTER TK was documented = prior art exists = risk
         if patent_date > tk_date:
             years_gap = (patent_date - tk_date).days / 365
             if years_gap > 50:
-                risk_points = max(risk_points, 20)  # TK very old, patent new
+                inten = max(inten, 1.0)
             elif years_gap > 10:
-                risk_points = max(risk_points, 15)
+                inten = max(inten, 0.75)
             else:
-                risk_points = max(risk_points, 8)
-
-    return risk_points
+                inten = max(inten, 0.4)
+    return _round(inten, config.RISK_WEIGHT_TEMPORAL)
 
 
 def calc_geographic_risk(tk_entry: dict, search_results: list) -> int:
-    """
-    Factor 3: Does the patent country differ from TK origin country?
-    Max 15 points
-
-    Bio-piracy pattern: TK from India, patent filed in US/EP
-    If TK and patent are from the same country → lower risk
-    If patent is from a different country → higher risk
-    """
+    """Factor 3 — are candidate patents filed in a country other than the TK
+    origin? (cap: RISK_WEIGHT_GEOGRAPHIC). Unknown origin → 0."""
     if not search_results:
         return 0
-
-    tk_country = tk_entry.get("country", "").upper()
+    tk_country = (tk_entry.get("country") or "").upper()
     if not tk_country:
-        return 8  # Unknown — assume moderate risk
+        return 0
 
-    foreign_patents = 0
-    total_checked = 0
-
+    foreign = total = 0
     for result in search_results[:3]:
-        patent_country = result.get("metadata", {}).get("country", "").upper()
+        patent_country = (result.get("metadata", {}).get("country") or "").upper()
         if patent_country:
-            total_checked += 1
+            total += 1
             if patent_country != tk_country:
-                foreign_patents += 1
+                foreign += 1
+    if total == 0:
+        return 0
 
-    if total_checked == 0:
-        return 8
-
-    foreign_ratio = foreign_patents / total_checked
-
-    if foreign_ratio >= 1.0:
-        return 15   # All patents from different country
-    elif foreign_ratio >= 0.5:
-        return 10
+    ratio = foreign / total
+    if ratio >= 1.0:
+        inten = 1.0
+    elif ratio >= 0.5:
+        inten = 0.667
+    elif ratio > 0:
+        inten = 0.333
     else:
-        return 5
+        inten = 0.0  # all patents share the TK origin country → no signal
+    return _round(inten, config.RISK_WEIGHT_GEOGRAPHIC)
 
 
 def calc_assignee_risk(search_results: list) -> int:
-    """
-    Factor 4: Who owns the patent?
-    Max 15 points
-
-    Corporate assignees = higher risk (profit motive)
-    Known bad actors = highest risk
-    Academic/university = lower risk
-    Individual = lowest risk
-    """
+    """Factor 4 — who owns the candidate patents? (cap: RISK_WEIGHT_ASSIGNEE).
+    Known bio-piracy actor > generic corporation > academic > individual/unknown.
+    Unknown/individual contributes 0 (no profit-motive evidence)."""
     if not search_results:
         return 0
-
-    max_risk = 0
-
+    inten = 0.0
     for result in search_results[:3]:
-        assignee = result.get("metadata", {}).get("assignee", "").lower()
-
-        if any(bad in assignee for bad in HIGH_RISK_ASSIGNEES):
-            max_risk = max(max_risk, 15)  # Known bio-piracy company
-        elif any(corp in assignee for corp in ["inc", "corp", "ltd", "co.", "llc", "gmbh"]):
-            max_risk = max(max_risk, 10)  # Generic corporation
-        elif any(acad in assignee for acad in ["university", "institute", "college"]):
-            max_risk = max(max_risk, 5)   # Academic — lower risk
-        else:
-            max_risk = max(max_risk, 7)   # Unknown — moderate risk
-
-    return max_risk
+        assignee = (result.get("metadata", {}).get("assignee") or "").lower().strip()
+        if not assignee or assignee == "unknown":
+            continue
+        if any(bad in assignee for bad in config.HIGH_RISK_ASSIGNEES):
+            inten = max(inten, 1.0)
+        elif _CORP_RE.search(assignee):
+            inten = max(inten, 0.667)
+        elif _ACADEMIC_RE.search(assignee):
+            inten = max(inten, 0.267)
+        # else: a named individual / unclassified entity → no added risk
+    return _round(inten, config.RISK_WEIGHT_ASSIGNEE)
 
 
 def calc_ipc_risk(search_results: list) -> int:
-    """
-    Factor 5: Is the patent in a high-risk category?
-    Max 10 points
-
-    IPC codes are international patent classification codes
-    Certain categories have historically been used for bio-piracy
-    """
+    """Factor 5 — is a candidate patent in a historically bio-piracy-prone IPC
+    class? (cap: RISK_WEIGHT_IPC). No match / no data → 0."""
     if not search_results:
         return 0
-
     for result in search_results[:3]:
-        ipc = result.get("metadata", {}).get("ipc_code", "")
+        ipc = (result.get("metadata", {}).get("ipc_code") or "").strip()
         if not ipc:
             continue
-
-        # Check if IPC code starts with any high-risk prefix
-        for risk_code in HIGH_RISK_IPC_CODES:
-            if ipc.startswith(risk_code):
-                return 10
-
-    return 3  # Default low risk if no IPC data
+        if any(ipc.startswith(code) for code in config.HIGH_RISK_IPC_CODES):
+            return config.RISK_WEIGHT_IPC
+    return 0
 
 
 def get_recommendation(risk_level: str) -> list:
-    """
-    Generate actionable recommendations based on risk level
-    """
+    """Actionable, channel-specific recommendations per risk band."""
     recommendations = {
         "CRITICAL": [
             "File an opposition immediately with the relevant patent office",
             "Submit evidence of prior art to USPTO/EPO/WIPO",
             "Contact WIPO IGC for emergency TK protection measures",
             "Engage a patent attorney specializing in bio-piracy cases",
-            "Notify the originating indigenous community immediately"
+            "Notify the originating indigenous community immediately",
         ],
         "HIGH": [
             "File a defensive publication in WIPO PATENTSCOPE",
             "Submit TK entry to Traditional Knowledge Digital Library (TKDL)",
             "Monitor patent status closely for grant decisions",
             "Contact WIPO IGC for formal TK protection registration",
-            "Document community use with timestamps and witnesses"
+            "Document community use with timestamps and witnesses",
         ],
         "MEDIUM": [
             "Register TK formally in TKDL as a precautionary measure",
             "Set up patent monitoring alerts for related IPC codes",
             "Document TK with dates, community names, and geographic origin",
-            "Consult with an IP lawyer about defensive documentation"
+            "Consult with an IP lawyer about defensive documentation",
         ],
         "LOW": [
             "Document TK entry with formal timestamps",
             "Monitor USPTO Class 514 for similar future applications",
-            "Consider registering in CBD Access and Benefit Sharing database"
+            "Consider registering in CBD Access and Benefit Sharing database",
         ],
         "MINIMAL": [
             "TK appears safe currently — continue routine monitoring",
-            "Maintain documentation for future reference"
-        ]
+            "Maintain documentation for future reference",
+        ],
     }
     return recommendations.get(risk_level, [])
 
 
+def _band(total_score: int) -> str:
+    if total_score >= config.RISK_BAND_CRITICAL:
+        return "CRITICAL"
+    if total_score >= config.RISK_BAND_HIGH:
+        return "HIGH"
+    if total_score >= config.RISK_BAND_MEDIUM:
+        return "MEDIUM"
+    if total_score >= config.RISK_BAND_LOW:
+        return "LOW"
+    return "MINIMAL"
+
+
 def score_risk(tk_entry: dict, search_results: list) -> dict:
     """
-    Master function — runs all 5 factors and returns complete risk assessment
-    This is what TK-Shield calls after every search
+    Run all 5 factors and return the complete risk assessment.
+
+    The four aggravating factors are gated on a credible match: if the top
+    similarity is below `config.RISK_RELEVANCE_GATE`, they are zeroed and risk
+    reflects similarity alone (see module docstring).
     """
     factors = {
         "similarity_score": calc_similarity_risk(search_results),
         "temporal_risk":    calc_temporal_risk(tk_entry, search_results),
         "geographic_risk":  calc_geographic_risk(tk_entry, search_results),
         "assignee_risk":    calc_assignee_risk(search_results),
-        "ipc_risk":         calc_ipc_risk(search_results)
+        "ipc_risk":         calc_ipc_risk(search_results),
     }
 
-    total_score = sum(factors.values())
+    top_sim = (search_results[0].get("similarity_score", 0) or 0) if search_results else 0
+    gated = top_sim < config.RISK_RELEVANCE_GATE
+    if gated:
+        for k in ("temporal_risk", "geographic_risk", "assignee_risk", "ipc_risk"):
+            factors[k] = 0
 
-    # Determine risk level
-    if total_score >= 80:
-        risk_level = "CRITICAL"
-    elif total_score >= 60:
-        risk_level = "HIGH"
-    elif total_score >= 40:
-        risk_level = "MEDIUM"
-    elif total_score >= 20:
-        risk_level = "LOW"
-    else:
-        risk_level = "MINIMAL"
+    total_score = sum(factors.values())
+    risk_level = _band(total_score)
 
     return {
         "total_score": total_score,
         "max_possible": 100,
         "risk_level": risk_level,
         "factors": factors,
-        "recommendations": get_recommendation(risk_level)
+        # Transparency: surface that aggravating factors were withheld because no
+        # credible candidate patent was found (helps explain a low score).
+        "relevance_gated": gated,
+        "recommendations": get_recommendation(risk_level),
     }
 
 
-# ── Quick test ──────────────────────────────────────────────
+# ── Quick smoke test ─────────────────────────────────────────
 if __name__ == "__main__":
-
-    # Simulate the real turmeric bio-piracy case
-    turmeric_tk = {
-        "tk_id": "TK-IND-0001",
-        "practice_name": "Turmeric for wound healing",
-        "community": "Traditional Ayurvedic communities",
-        "country": "IN",
-        "documentation_date": "1950-01-01",  # Ancient knowledge, documented 1950
-        "category": "Medicinal"
-    }
-
-    # These are the search results our hybrid search returned
-    turmeric_patents = [
-        {
-            "metadata": {
-                "patent_id": "US5401504A",
-                "title": "Use of turmeric in wound healing",
-                "assignee": "University of Mississippi",
-                "filing_date": "1993-01-04",
-                "country": "US",
-                "status": "REVOKED",
-                "ipc_code": "A61K36/906"
-            },
-            "similarity_score": 0.88
-        }
-    ]
-
-    # Simulate the neem bio-piracy case
-    neem_tk = {
-        "tk_id": "TK-IND-0002",
-        "practice_name": "Neem as antifungal agent",
-        "community": "Indian farming communities",
-        "country": "IN",
-        "documentation_date": "1960-06-01",
-        "category": "Agricultural"
-    }
-
-    neem_patents = [
-        {
-            "metadata": {
-                "patent_id": "EP0436257B1",
-                "title": "Neem oil antifungal agent",
-                "assignee": "W.R. Grace & Co.",
-                "filing_date": "1990-06-12",
-                "country": "EP",
-                "status": "CANCELLED",
-                "ipc_code": "A01H5/00"
-            },
-            "similarity_score": 0.70
-        }
-    ]
-
-    test_cases = [
-        ("TURMERIC CASE", turmeric_tk, turmeric_patents),
-        ("NEEM CASE",     neem_tk,     neem_patents),
-    ]
-
-    print("=" * 60)
-    print("TK-SHIELD — IP RISK CLASSIFIER TEST")
-    print("=" * 60)
-
-    for case_name, tk_entry, patents in test_cases:
-        result = score_risk(tk_entry, patents)
-
-        print(f"\n{'='*60}")
-        print(f"CASE: {case_name}")
-        print(f"{'='*60}")
-        print(f"  Risk Level    : {result['risk_level']}")
-        print(f"  Total Score   : {result['total_score']} / {result['max_possible']}")
-        print(f"\n  Score Breakdown:")
-        for factor, score in result["factors"].items():
-            bar = "█" * score
-            print(f"    {factor:<20} {score:>3} pts  {bar}")
-        print(f"\n  Recommendations:")
-        for rec in result["recommendations"]:
-            print(f"    → {rec}")
+    turmeric_tk = {"practice_name": "Turmeric for wound healing", "country": "IN",
+                   "documentation_date": "1950-01-01"}
+    turmeric_hit = [{"metadata": {"patent_id": "US5401504A", "assignee": "University of Mississippi",
+                                  "filing_date": "1993-01-04", "country": "US",
+                                  "ipc_code": "A61K36/906"}, "similarity_score": 0.88}]
+    benign = [{"metadata": {"patent_id": "US9999999", "assignee": "Acme Inc.",
+                            "filing_date": "2015-01-01", "country": "US",
+                            "ipc_code": "G06F"}, "similarity_score": 0.49}]
+    for name, tk, hits in [("TURMERIC", turmeric_tk, turmeric_hit),
+                           ("BENIGN(IN, weak match)", {"country": "IN"}, benign)]:
+        r = score_risk(tk, hits)
+        print(f"{name}: {r['risk_level']} {r['total_score']}/100 "
+              f"gated={r['relevance_gated']} factors={r['factors']}")

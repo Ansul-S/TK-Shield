@@ -66,8 +66,17 @@ def load_patents_from_csv(csv_path: str) -> list[dict]:
         return default if s.lower() == "nan" else s
 
     patents = []
+    excluded_sources = 0
     for _, row in df.iterrows():
         text = _s(row.get("text", ""))
+
+        # Drop synthetic/low-fidelity sources so the corpus is genuinely real
+        # patent metadata (e.g. the ccdv HF fallback). Configurable via
+        # config.EXCLUDE_PATENT_SOURCES; landmark/bulk rows are unaffected.
+        src = _s(row.get("source", "")).lower()
+        if src and any(bad in src for bad in config.EXCLUDE_PATENT_SOURCES):
+            excluded_sources += 1
+            continue
 
         # Apply strict filter
         if not is_strictly_tk_relevant(text):
@@ -89,7 +98,10 @@ def load_patents_from_csv(csv_path: str) -> list[dict]:
             }
         })
 
-    logger.success(f"After strict TK filter: {len(patents)} patents kept")
+    logger.success(
+        f"After strict TK filter: {len(patents)} patents kept "
+        f"({excluded_sources} excluded by source filter)"
+    )
     return patents
 
 

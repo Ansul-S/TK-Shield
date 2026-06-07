@@ -1,5 +1,7 @@
 # api/deps.py — cached singletons + small helpers shared by routes.
 
+import threading
+from contextlib import contextmanager
 from functools import lru_cache
 
 from loguru import logger
@@ -9,6 +11,30 @@ from src.rag.llm_client import get_llm
 from src.registry import tk_store
 from src.search.hybrid_ranker import HybridSearchEngine
 from src.utils.config import config
+
+
+class LLMBusy(RuntimeError):
+    """Raised when the concurrent-LLM-request cap is reached (→ HTTP 503)."""
+
+
+# Bound concurrent LLM-backed requests (/report, /novelty) so a burst of slow
+# synchronous calls can't saturate the threadpool / pin the local model. Excess
+# requests get a clean 503 instead of all stalling for minutes.
+_llm_semaphore = threading.BoundedSemaphore(max(1, config.MAX_CONCURRENT_LLM))
+
+
+@contextmanager
+def llm_slot():
+    """Acquire one of the limited LLM slots, or raise LLMBusy immediately."""
+    if not _llm_semaphore.acquire(blocking=False):
+        raise LLMBusy(
+            f"Server busy: at most {config.MAX_CONCURRENT_LLM} report/novelty "
+            "requests run concurrently. Please retry shortly."
+        )
+    try:
+        yield
+    finally:
+        _llm_semaphore.release()
 
 
 @lru_cache(maxsize=1)

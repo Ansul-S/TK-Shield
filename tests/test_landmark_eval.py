@@ -37,3 +37,12 @@ def test_retrieval_quality_thresholds(report):
     assert s["precision_at_5"] == 1.0          # all three in top 5
     assert s["precision_at_1"] >= 0.6          # at least 2/3 as the closest match
     assert s["mrr"] >= 0.8
+
+
+def test_benign_controls_are_not_false_positives(report):
+    # Specificity: benign control practices must not be flagged HIGH/CRITICAL,
+    # nor match a landmark patent. Guards against the risk-model inflation (H1).
+    assert report["summary"]["control_false_positive_rate"] == 0.0
+    for c in report["controls"]:
+        assert not c["flagged"], c["practice_name"]
+        assert not c["matched_landmark"], c["practice_name"]
