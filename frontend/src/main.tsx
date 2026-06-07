@@ -3,12 +3,13 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "react-router-dom";
 import { router } from "@/app/routes";
+import { STALE_TIME_MS } from "@/config";
 import "@fontsource-variable/inter"; // self-hosted GT America substitute (no CDN)
 import "@/styles/globals.css";
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: false },
+    queries: { staleTime: STALE_TIME_MS, retry: 1, refetchOnWindowFocus: false },
   },
 });
 

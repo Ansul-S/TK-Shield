@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, ShieldCheck, X } from "lucide-react";
 import { useTkEntries } from "@/api/hooks";
+import { PAGE_SIZE } from "@/config";
 import { SearchBox } from "@/components/SearchBox";
 import { Pager } from "@/components/Pager";
 import { Skeleton } from "@/components/Spinner";
@@ -11,8 +12,6 @@ import { dash } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { RegisterForm } from "./RegisterForm";
 import { EntryWorkspace } from "./EntryWorkspace";
-
-const PAGE = 25;
 
 // Defender — register documented TK, browse the registry, and run defensive
 // checks (risk score, full RAG report, live monitor, export) against the
@@ -24,7 +23,7 @@ export function DefenderPage() {
   const [offset, setOffset] = useState(0);
   const [adding, setAdding] = useState(false);
 
-  const list = useTkEntries(q, PAGE, offset);
+  const list = useTkEntries(q, PAGE_SIZE, offset);
 
   return (
     <div className="grid h-full grid-cols-1 md:grid-cols-[300px_1fr]">
@@ -105,7 +104,7 @@ export function DefenderPage() {
           <div className="border-t border-border px-3 py-2.5">
             <Pager
               total={list.data.total}
-              limit={PAGE}
+              limit={PAGE_SIZE}
               offset={offset}
               onChange={setOffset}
             />

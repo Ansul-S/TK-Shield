@@ -68,6 +68,23 @@ def test_bulk_filters_to_tk_and_keeps_real_metadata():
     assert pts[0]["metadata"]["source"] == "patentsview-bulk"
 
 
+def test_bulk_uses_configurable_jurisdiction(monkeypatch):
+    # The id prefix + country come from config (no hardcoded "US"); changing the
+    # jurisdiction relabels new rows. (Tier 3)
+    monkeypatch.setattr(bulk.config, "DEFAULT_JURISDICTION", "EP")
+    monkeypatch.setattr(bulk.config, "DEFAULT_PATENT_COUNTRY", "EP")
+    gp = pd.DataFrame({
+        "patent_id": ["12345"],
+        "patent_title": ["Turmeric wound healing"],
+        "patent_abstract": ["herbal extract"],
+        "patent_date": ["2015-01-06"],
+    })
+    p = bulk.patents_from_frame(gp)[0]
+    assert p["id"] == "EP12345"
+    assert p["metadata"]["patent_id"] == "EP12345"
+    assert p["metadata"]["country"] == "EP"
+
+
 def test_bulk_assignee_join():
     ga = pd.DataFrame({
         "patent_id": ["10000001", "10000003", "9999999"],
