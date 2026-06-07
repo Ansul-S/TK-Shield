@@ -41,8 +41,12 @@ _GEO_REGIONS_RELIGIONS = {
     "BUDDHISM", "JEWISH", "JUDAISM", "SIKH", "JAIN", "TAOIST", "SHINTO",
 }
 
-# Common country names (uppercase). Not exhaustive, but covers the Duke labels.
-_COUNTRIES = {
+# Country names are sourced from `pycountry` (so we don't hand-maintain the
+# world). The set below is the FALLBACK used only when pycountry is unavailable
+# — it preserves the prior behaviour exactly. Common/colloquial forms that
+# pycountry's canonical names omit (US/UK/England/Burma/…) are always added on
+# top via _COUNTRY_ALIASES, so no Duke label regresses.
+_FALLBACK_COUNTRIES = {
     "INDIA", "CHINA", "JAPAN", "USA", "US", "UNITED STATES", "UK",
     "UNITED KINGDOM", "ENGLAND", "SCOTLAND", "IRELAND", "FRANCE", "GERMANY",
     "ITALY", "SPAIN", "PORTUGAL", "GREECE", "TURKEY", "RUSSIA", "POLAND",
@@ -61,7 +65,33 @@ _COUNTRIES = {
     "FIJI", "PAPUA NEW GUINEA", "HAWAII", "TIBET",
 }
 
-_GEO_NOT_PEOPLE = _GEO_REGIONS_RELIGIONS | _COUNTRIES
+# Colloquial / sub-national forms pycountry's canonical names don't include
+# (verified against _FALLBACK_COUNTRIES) — always applied so behaviour is
+# preserved whether or not pycountry is present.
+_COUNTRY_ALIASES = {
+    "US", "USA", "UK", "ENGLAND", "SCOTLAND", "BURMA", "TIBET", "HAWAII",
+    "KOREA", "SOUTH KOREA", "NORTH KOREA", "RUSSIA", "TURKEY",
+}
+
+
+def _country_names() -> set[str]:
+    """Uppercased country names from pycountry; falls back to the built-in set
+    when pycountry is unavailable (preserves prior behaviour)."""
+    try:
+        import pycountry
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"pycountry unavailable ({e}); using built-in country list")
+        return set(_FALLBACK_COUNTRIES)
+    names: set[str] = set()
+    for c in pycountry.countries:
+        for attr in ("name", "official_name", "common_name"):
+            v = getattr(c, attr, None)
+            if v:
+                names.add(v.upper())
+    return names
+
+
+_GEO_NOT_PEOPLE = _GEO_REGIONS_RELIGIONS | _country_names() | _COUNTRY_ALIASES
 
 
 def is_not_a_people(value: str) -> bool:

@@ -3,6 +3,7 @@
 import spacy
 
 from src.utils.config import config
+from src.utils.lexicons import load_set
 
 nlp = spacy.load(config.SPACY_MODEL)
 
@@ -10,9 +11,11 @@ nlp = spacy.load(config.SPACY_MODEL)
 # These are dictionaries of terms we teach the system
 # In a real system this would be 1000s of entries from TKDL
 
-# Broadened across domains (medicinal, agricultural, food, cosmetic) and with
-# common transliterations (Hindi/regional) to aid multilingual coverage.
-PLANT_NAMES = {
+# Frozen in-code fallbacks. The authoritative lexicons live in
+# data/lexicons/*.json (config.LEXICON_DIR) and are loaded below; these sets are
+# used only if a file is missing/invalid. Broadened across domains (medicinal,
+# agricultural, food, cosmetic) with common transliterations for coverage.
+_PLANT_NAMES_FALLBACK = {
     # India / Ayurveda
     "neem", "azadirachta indica", "turmeric", "haldi", "curcuma longa",
     "basmati", "ashwagandha", "withania somnifera", "tulsi", "holy basil",
@@ -37,14 +40,14 @@ PLANT_NAMES = {
     "kava", "piper methysticum",
 }
 
-KNOWLEDGE_SYSTEMS = {
+_KNOWLEDGE_SYSTEMS_FALLBACK = {
     "ayurvedic", "ayurveda", "unani", "siddha", "tcm",
     "traditional chinese medicine", "kampo", "indigenous", "folk medicine",
     "tribal", "ethnobotanical", "ethnomedicine", "traditional knowledge",
 }
 
 # Kept key name "medical_uses" for compatibility, but now spans all domains.
-MEDICAL_USES = {
+_MEDICAL_USES_FALLBACK = {
     # Medicinal
     "wound healing", "antimalarial", "antifungal", "antibacterial",
     "antimicrobial", "antiviral", "anti-inflammatory", "fever", "malaria",
@@ -61,11 +64,17 @@ MEDICAL_USES = {
     "anti-aging", "complexion",
 }
 
-PRACTICES = {
+_PRACTICES_FALLBACK = {
     "decoction", "paste", "poultice", "extract", "infusion",
     "fermentation", "distillation", "cold press", "tincture",
     "powder", "churna", "oil", "pressing", "smoke", "wrap",
 }
+
+# Authoritative lexicons (JSON), with the frozen sets above as fallback.
+PLANT_NAMES = load_set("plants", _PLANT_NAMES_FALLBACK)
+KNOWLEDGE_SYSTEMS = load_set("knowledge_systems", _KNOWLEDGE_SYSTEMS_FALLBACK)
+MEDICAL_USES = load_set("medical_uses", _MEDICAL_USES_FALLBACK)
+PRACTICES = load_set("practices", _PRACTICES_FALLBACK)
 
 
 def extract_spacy_entities(text: str) -> list:

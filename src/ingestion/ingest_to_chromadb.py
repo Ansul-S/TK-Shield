@@ -7,11 +7,14 @@ from loguru import logger
 from pathlib import Path
 from tqdm import tqdm
 from src.utils.config import config
+from src.utils.lexicons import load_list
 
 # ── Better TK relevance filter ────────────────────────────────
-# These are highly specific TK/bio-piracy terms
-# Much stricter than the keyword list in scraper
-STRICT_TK_KEYWORDS = [
+# Highly specific TK/bio-piracy terms (much stricter than the scraper list).
+# Authoritative list: data/lexicons/strict_tk_keywords.json; the block below is
+# the frozen fallback. NOTE: this filter governs which CSV rows are indexed, so
+# changing it changes the corpus — re-run ingest_to_chromadb after editing.
+_STRICT_TK_KEYWORDS_FALLBACK = [
     # Plants and botanicals
     "plant extract", "herbal", "botanical", "medicinal plant",
     "plant material", "plant species", "plant variety",
@@ -40,6 +43,9 @@ STRICT_TK_KEYWORDS = [
     "traditional crop", "indigenous crop",
     "genetic resource", "biodiversity"
 ]
+
+# Authoritative strict-filter keywords (JSON), frozen fallback above.
+STRICT_TK_KEYWORDS = load_list("strict_tk_keywords", _STRICT_TK_KEYWORDS_FALLBACK)
 
 
 def is_strictly_tk_relevant(text: str) -> bool:
