@@ -86,7 +86,7 @@ def _append_to_csv() -> None:
 def _add_to_chroma() -> None:
     client = chromadb.PersistentClient(path=config.CHROMA_DB_PATH)
     collection = client.get_or_create_collection(
-        name=config.PATENTS_COLLECTION, metadata={"hnsw:space": "cosine"}
+        name=config.PATENTS_COLLECTION, metadata={"hnsw:space": config.CHROMA_DISTANCE}
     )
     docs = [c["text"] for c in LANDMARK_CASES]
     collection.upsert(

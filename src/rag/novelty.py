@@ -71,7 +71,7 @@ def assess_novelty(patent_text: str, n_results: int = 5, llm=None) -> dict:
             for m in matches[:5]
         )
         prompt = (
-            f"PATENT TEXT:\n{patent_text[:1500]}\n\n"
+            f"PATENT TEXT:\n{patent_text[:config.PATENT_TEXT_MAX_CHARS]}\n\n"
             f"DOCUMENTED TK PRIOR ART (most similar first):\n{prior}\n\n"
             f"Computed verdict from similarity: {verdict}.\n"
             "Write a 2-3 sentence examiner note explaining whether the patent "

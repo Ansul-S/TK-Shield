@@ -15,10 +15,6 @@ from loguru import logger
 from src.clients import pubmed_client, wikidata_client, gbif_client
 from src.utils.config import config
 
-# Cap how many plants we fan out enrichment for, so an entry with many plants
-# can't trigger an unbounded number of network calls.
-_MAX_ENRICH_PLANTS = 8
-
 
 def _build_query(plants: list[str], uses: list[str]) -> str:
     """Combine plant + use terms into a PubMed-friendly query string."""
@@ -56,11 +52,11 @@ def gather_evidence(plants: list[str], uses: list[str],
     # Fan out all independent network calls concurrently. Each client already
     # returns None/[] on failure (never raises), so graceful degradation is
     # preserved — concurrency only cuts wall-time (was sequential per plant).
-    enrich_plants = plants[:_MAX_ENRICH_PLANTS]
+    enrich_plants = plants[:config.ENRICH_MAX_PLANTS]
     wd_results: dict[str, dict | None] = {}
     gb_results: dict[str, dict | None] = {}
     lit_result: list = []
-    with cf.ThreadPoolExecutor(max_workers=8) as ex:
+    with cf.ThreadPoolExecutor(max_workers=config.ENRICH_WORKERS) as ex:
         futs = {}
         for plant in enrich_plants:
             if config.ENABLE_WIKIDATA:

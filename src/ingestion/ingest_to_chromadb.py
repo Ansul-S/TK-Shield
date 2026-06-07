@@ -87,8 +87,8 @@ def load_patents_from_csv(csv_path: str) -> list[dict]:
             "text": text,
             "metadata": {
                 "patent_id":   _s(row.get("patent_id", "")),
-                "title":       _s(row.get("title", ""))[:200],
-                "abstract":    _s(row.get("abstract", ""))[:500],
+                "title":       _s(row.get("title", ""))[:config.TITLE_MAX_CHARS],
+                "abstract":    _s(row.get("abstract", ""))[:config.ABSTRACT_MAX_CHARS],
                 "assignee":    _s(row.get("assignee", "Unknown")) or "Unknown",
                 "filing_date": _s(row.get("filing_date", "")),
                 "country":     _s(row.get("country", "US")) or "US",
@@ -126,7 +126,7 @@ def embed_and_store(patents: list[dict], batch_size: int | None = None,
             pass
 
     collection = client.get_or_create_collection(
-        name=collection_name, metadata={"hnsw:space": "cosine"}
+        name=collection_name, metadata={"hnsw:space": config.CHROMA_DISTANCE}
     )
 
     if not rebuild:

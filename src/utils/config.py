@@ -37,6 +37,18 @@ class Config:
     ENABLE_WIKIDATA    = os.getenv("ENABLE_WIKIDATA", "true").lower() == "true"
     ENABLE_GBIF        = os.getenv("ENABLE_GBIF", "true").lower() == "true"
     ENABLE_PATENTSVIEW = os.getenv("ENABLE_PATENTSVIEW", "true").lower() == "true"
+    # Prior-art enrichment fan-out: concurrent client calls and the max number of
+    # plants per entry we look up (bounds the network work for an entry with many
+    # plants). Keep ENRICH_WORKERS modest to stay polite to the free APIs.
+    ENRICH_WORKERS     = int(os.getenv("ENRICH_WORKERS", "8"))
+    ENRICH_MAX_PLANTS  = int(os.getenv("ENRICH_MAX_PLANTS", "8"))
+
+    # ── Text limits (truncation applied consistently across ingest/clients) ──
+    # Patent metadata is stored/displayed truncated; the LLM novelty prompt caps
+    # the pasted patent text. Defaults match the previously-hardcoded literals.
+    TITLE_MAX_CHARS        = int(os.getenv("TITLE_MAX_CHARS", "200"))
+    ABSTRACT_MAX_CHARS     = int(os.getenv("ABSTRACT_MAX_CHARS", "500"))
+    PATENT_TEXT_MAX_CHARS  = int(os.getenv("PATENT_TEXT_MAX_CHARS", "1500"))
 
     # ── RAG / LLM (Ollama, local) ───────────────────────────
     OLLAMA_BASE_URL  = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -50,6 +62,15 @@ class Config:
     CHROMA_DB_PATH   = os.getenv("CHROMA_DB_PATH", "./chroma_db")
     PATENTS_COLLECTION = os.getenv("PATENTS_COLLECTION", "patents")
     TK_COLLECTION      = os.getenv("TK_COLLECTION", "tk_entries")
+    # HNSW distance metric for every collection. "cosine" pairs with the
+    # normalized embeddings (similarity = 1 - distance). Set once here so the
+    # vector store, ingest and seed scripts can't drift.
+    CHROMA_DISTANCE  = os.getenv("CHROMA_DISTANCE", "cosine")
+
+    # ── NLP ─────────────────────────────────────────────────
+    # spaCy model used by the NER extractor + preprocessor (English-first).
+    # Override to swap models (e.g. a larger or multilingual pipeline).
+    SPACY_MODEL      = os.getenv("SPACY_MODEL", "en_core_web_sm")
 
     # ── Search ──────────────────────────────────────────────
     EMBEDDING_MODEL  = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
@@ -67,10 +88,13 @@ class Config:
 
     # ── Corpus scale-up ─────────────────────────────────────
     # Patent source for build_corpus:
-    #   "ccdv"            — keyless HuggingFace corpus (no download; low-fidelity metadata)
-    #   "patentsview_bulk"— keyless PatentsView bulk TSV (REAL metadata; ~219MB download) ← recommended
+    #   "patentsview_bulk"— keyless PatentsView bulk TSV (REAL metadata; ~219MB download) ← default
     #   "patentsview"     — PatentsView live API harvest (real metadata; needs a free key)
-    PATENT_SOURCE    = os.getenv("PATENT_SOURCE", "ccdv")
+    #   "ccdv"            — keyless HuggingFace corpus (low-fidelity synthetic metadata).
+    #                       NOTE: ccdv is in EXCLUDE_PATENT_SOURCES below, so a corpus
+    #                       built from it is dropped at index time — do not use it as the
+    #                       indexed source (build_corpus fails fast if you try).
+    PATENT_SOURCE    = os.getenv("PATENT_SOURCE", "patentsview_bulk")
     MAX_PATENTS      = int(os.getenv("MAX_PATENTS", "5000"))
 
     # PatentsView bulk (keyless public files; no API key/registration).
@@ -152,6 +176,10 @@ class Config:
     # (foreign filing, post-dating, corporate assignee) that are meaningless
     # without a real match.
     RISK_RELEVANCE_GATE    = float(os.getenv("RISK_RELEVANCE_GATE", "0.50"))
+    # How many top candidate patents the aggravating factors inspect (the closest
+    # N hits). Wider = more chances to find a foreign/post-dating/corporate
+    # signal; narrower = stricter "is the very top match risky".
+    RISK_TOP_N_CONSIDERED  = int(os.getenv("RISK_TOP_N_CONSIDERED", "3"))
     # Band thresholds (inclusive lower bounds, on the 0–100 total).
     RISK_BAND_CRITICAL = int(os.getenv("RISK_BAND_CRITICAL", "80"))
     RISK_BAND_HIGH     = int(os.getenv("RISK_BAND_HIGH", "60"))
@@ -187,6 +215,30 @@ class Config:
     # Cap concurrent LLM-backed requests (/report, /novelty) so a burst can't
     # pin the box. Excess requests get a clean 503 instead of all stalling.
     MAX_CONCURRENT_LLM = int(os.getenv("MAX_CONCURRENT_LLM", "2"))
+
+    # ── Researcher stats ────────────────────────────────────
+    # Cap the patent-metadata scan in /api/stats so it stays fast on a large
+    # corpus (aggregates over a sample, not the whole collection).
+    STATS_PATENT_SAMPLE = int(os.getenv("STATS_PATENT_SAMPLE", "5000"))
+
+    def validate_corpus_config(self, source: str | None = None) -> None:
+        """Fail fast on a contradictory corpus configuration.
+
+        Building the indexed corpus from a source that is then excluded at index
+        time (EXCLUDE_PATENT_SOURCES) yields an empty index — a silent footgun.
+        `source` defaults to PATENT_SOURCE; pass the resolved source when it may
+        be overridden. Raises ValueError with a clear remedy.
+        """
+        resolved = source or self.PATENT_SOURCE
+        src = (resolved or "").lower()
+        if any(bad in src for bad in self.EXCLUDE_PATENT_SOURCES):
+            raise ValueError(
+                f"Patent source '{resolved}' is excluded by "
+                f"EXCLUDE_PATENT_SOURCES={self.EXCLUDE_PATENT_SOURCES}, so the "
+                f"indexed corpus would be empty. Use a real source (e.g. "
+                f"PATENT_SOURCE=patentsview_bulk), or remove it from "
+                f"EXCLUDE_PATENT_SOURCES if you intend to index it."
+            )
 
 
 config = Config()
