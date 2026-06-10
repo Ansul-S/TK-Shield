@@ -1,7 +1,9 @@
 # src/search/keyword_search.py
 
-from rank_bm25 import BM25Okapi
 import re
+
+from loguru import logger
+from rank_bm25 import BM25Okapi
 
 
 def tokenize_for_bm25(text: str) -> list:
@@ -44,7 +46,7 @@ class KeywordSearchEngine:
 
         # Build the BM25 index
         self.bm25 = BM25Okapi(tokenized)
-        print(f"✅ BM25 index built with {len(documents)} documents")
+        logger.info(f"BM25 index built with {len(documents)} documents")
 
     def search(self, query: str, n_results: int = 5) -> list:
         """

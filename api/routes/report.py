@@ -1,13 +1,14 @@
 # api/routes/report.py — full RAG report: retrieval + scoring + enrichment +
 # LLM-generated citation-backed assessment and opposition draft.
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
-from api.deps import LLMBusy, get_engine, get_llm_client, llm_slot, resolve_entry
+from api.deps import LLMBusy, get_engine, get_llm_client, limiter, llm_slot, resolve_entry
 from api.schemas import AnalyzeIn
 from src.rag import retriever, report_generator
 from src.report import renderer
+from src.utils.config import config
 
 router = APIRouter(prefix="/api/report", tags=["report"])
 
@@ -25,7 +26,9 @@ def _build(req: AnalyzeIn) -> dict:
 
 
 @router.post("")
-def make_report(req: AnalyzeIn, format: str = Query("json", pattern="^(json|markdown|pdf)$")) -> Response:
+@limiter.limit(config.RATE_LIMIT_LLM)
+def make_report(request: Request, req: AnalyzeIn,
+                format: str = Query("json", pattern="^(json|markdown|pdf)$")) -> Response:
     try:
         with llm_slot():  # bound concurrent expensive requests
             report = _build(req)

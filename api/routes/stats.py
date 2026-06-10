@@ -3,19 +3,21 @@
 
 from collections import Counter
 
-import chromadb
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
+from api.deps import limiter
 from src.classifier.domain import infer_domain
 from src.ingestion.tk_sources.duke_importer import DUKE_PROVENANCE
 from src.registry import tk_store
+from src.search import vector_store
 from src.utils.config import config
 
 router = APIRouter(prefix="/api/stats", tags=["researcher"])
 
 
 @router.get("")
-def stats() -> dict:
+@limiter.limit(config.RATE_LIMIT_DEFAULT)
+def stats(request: Request) -> dict:
     # --- TK registry (from SQLite source of truth) ---
     entries = tk_store.list_entries()
     tk_by_domain = Counter((e.get("domain") or "unknown") for e in entries)
@@ -35,9 +37,10 @@ def stats() -> dict:
     by_source: Counter = Counter()
     patent_by_domain: Counter = Counter()
     try:
-        col = chromadb.PersistentClient(path=config.CHROMA_DB_PATH).get_collection(
-            config.PATENTS_COLLECTION
-        )
+        # Reuse the shared persistent client (C6): opening a second
+        # PersistentClient on the same path per request is wasteful and risks
+        # ChromaDB state/lock contention under concurrent calls.
+        col = vector_store.get_or_create_collection(config.PATENTS_COLLECTION)
         patent_total = col.count()
         metas = col.get(include=["metadatas"], limit=config.STATS_PATENT_SAMPLE).get("metadatas", [])
         sampled = len(metas)

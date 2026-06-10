@@ -5,12 +5,22 @@ from contextlib import contextmanager
 from functools import lru_cache
 
 from loguru import logger
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from src.ingestion.ingest_to_chromadb import load_patents_from_csv
 from src.rag.llm_client import get_llm
 from src.registry import tk_store
 from src.search.hybrid_ranker import HybridSearchEngine
 from src.utils.config import config
+
+# Per-IP rate limiter (C7), shared by every route via `@limiter.limit(...)`.
+# Keyed on the client address; in-memory (no external store, keyless). Disabled
+# wholesale via RATE_LIMIT_ENABLED=false, in which case the decorators are
+# no-ops. We attach explicit decorators per route rather than a global
+# default-limits middleware so static assets, the SPA shell and /api/health
+# polling are never throttled.
+limiter = Limiter(key_func=get_remote_address, enabled=config.RATE_LIMIT_ENABLED)
 
 
 class LLMBusy(RuntimeError):

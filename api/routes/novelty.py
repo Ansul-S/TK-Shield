@@ -1,13 +1,14 @@
 # api/routes/novelty.py — Examiner persona: check a patent's novelty against
 # the documented TK registry (reverse lookup).
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from api.deps import LLMBusy, get_llm_client, llm_slot
+from api.deps import LLMBusy, get_llm_client, limiter, llm_slot
 from api.schemas import MAX_PATENT_TEXT, MAX_SHORT, NResults
 from src.clients import patentsview_client
 from src.rag import novelty
+from src.utils.config import config
 
 router = APIRouter(prefix="/api/novelty", tags=["examiner"])
 
@@ -20,7 +21,8 @@ class NoveltyIn(BaseModel):
 
 
 @router.post("")
-def check_novelty(req: NoveltyIn) -> dict:
+@limiter.limit(config.RATE_LIMIT_LLM)
+def check_novelty(request: Request, req: NoveltyIn) -> dict:
     text = req.patent_text.strip()
 
     # Optionally resolve a live patent by id (graceful if no key).

@@ -1,0 +1,27 @@
+# Keep the build context small + reproducible. The SPA is rebuilt in-image
+# (stage 1) and the corpus is seeded at start, so neither is copied in.
+.git/
+venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Frontend: rebuilt inside the image
+frontend/node_modules/
+frontend/dist/
+
+# Local/built data — seeded fresh in the container (or mounted as volumes)
+chroma_db/
+data/raw/
+data/processed/
+data/*.sqlite3
+data/tk_registry.sqlite3*
+
+# Local-only files
+.env
+.DS_Store
+notebooks/
+docs/
+*.md
+!README.md

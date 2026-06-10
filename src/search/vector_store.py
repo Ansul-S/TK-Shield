@@ -1,6 +1,8 @@
 # src/search/vector_store.py
 
 import chromadb
+from loguru import logger
+
 from src.embeddings.embed_pipeline import embed_text, embed_batch
 from src.utils.config import config
 
@@ -35,7 +37,7 @@ def add_documents(collection_name: str, documents: list, metadatas: list, ids: l
     collection = get_or_create_collection(collection_name)
 
     # Generate embeddings for all documents
-    print(f"Generating embeddings for {len(documents)} documents...")
+    logger.info(f"Generating embeddings for {len(documents)} documents...")
     embeddings = embed_batch(documents)
 
     # Store in ChromaDB
@@ -46,7 +48,7 @@ def add_documents(collection_name: str, documents: list, metadatas: list, ids: l
         ids=ids
     )
 
-    print(f"✅ Added {len(documents)} documents to '{collection_name}' collection")
+    logger.success(f"Added {len(documents)} documents to '{collection_name}' collection")
 
 
 def search(collection_name: str, query: str, n_results: int = 5) -> list:

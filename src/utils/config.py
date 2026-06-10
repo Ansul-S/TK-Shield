@@ -235,6 +235,13 @@ class Config:
     # Cap concurrent LLM-backed requests (/report, /novelty) so a burst can't
     # pin the box. Excess requests get a clean 503 instead of all stalling.
     MAX_CONCURRENT_LLM = int(os.getenv("MAX_CONCURRENT_LLM", "2"))
+    # Per-IP rate limiting (slowapi, in-memory). RATE_LIMIT_DEFAULT applies to
+    # every endpoint; RATE_LIMIT_LLM is a tighter cap on the expensive
+    # /report + /novelty routes. Disable entirely with RATE_LIMIT_ENABLED=false
+    # (e.g. for load tests). Format is slowapi/limits syntax ("120/minute").
+    RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
+    RATE_LIMIT_DEFAULT = os.getenv("RATE_LIMIT_DEFAULT", "120/minute")
+    RATE_LIMIT_LLM     = os.getenv("RATE_LIMIT_LLM", "10/minute")
 
     # ── Researcher stats ────────────────────────────────────
     # Cap the patent-metadata scan in /api/stats so it stays fast on a large

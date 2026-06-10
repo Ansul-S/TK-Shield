@@ -1,15 +1,18 @@
 # api/routes/tk.py — CRUD for documented TK entries (the registry).
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
+from api.deps import limiter
 from api.schemas import TKEntryIn
 from src.registry import tk_store
+from src.utils.config import config
 
 router = APIRouter(prefix="/api/tk", tags=["tk"])
 
 
 @router.post("")
-def create_entry(entry: TKEntryIn) -> dict:
+@limiter.limit(config.RATE_LIMIT_DEFAULT)
+def create_entry(request: Request, entry: TKEntryIn) -> dict:
     try:
         return tk_store.add_entry(entry.model_dump())
     except ValueError as e:
@@ -17,7 +20,8 @@ def create_entry(entry: TKEntryIn) -> dict:
 
 
 @router.get("")
-def list_entries(q: str = "", limit: int = 25, offset: int = 0) -> dict:
+@limiter.limit(config.RATE_LIMIT_DEFAULT)
+def list_entries(request: Request, q: str = "", limit: int = 25, offset: int = 0) -> dict:
     """Paginated, searchable list. Returns {items, total, limit, offset, q}."""
     limit = max(1, min(limit, 200))   # clamp page size
     offset = max(0, offset)

@@ -2,17 +2,19 @@
 # Gracefully degrades: with no free API key, returns available=false and a
 # note instead of failing. The rest of TK-Shield is unaffected.
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
-from api.deps import resolve_entry
+from api.deps import limiter, resolve_entry
 from api.schemas import MonitorIn
 from src.clients import patentsview_client
+from src.utils.config import config
 
 router = APIRouter(prefix="/api/monitor", tags=["monitor"])
 
 
 @router.post("")
-def monitor(req: MonitorIn) -> dict:
+@limiter.limit(config.RATE_LIMIT_DEFAULT)
+def monitor(request: Request, req: MonitorIn) -> dict:
     query = req.query
     if not query and req.tk_id:
         try:
