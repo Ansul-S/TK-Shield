@@ -13,10 +13,12 @@ import { Markdown } from "@/lib/markdown";
 import { dash } from "@/lib/format";
 import { VerdictBadge } from "./VerdictBadge";
 
+import type { ClaimAssessment } from "@/api/types";
+
 const STAGES = [
+  "Splitting the patent into claims",
   "Searching the documented TK registry",
-  "Ranking prior-art matches",
-  "Assessing novelty",
+  "Assessing novelty claim by claim",
 ];
 
 // Examiner — paste a patent's text and reverse-look it up against documented TK
@@ -41,8 +43,10 @@ export function ExaminerPage() {
         </h1>
       </div>
       <p className="mt-1 text-sm text-secondary">
-        Paste a patent's title, abstract, or claims. TK-Shield searches the
-        Traditional-Knowledge registry for prior art and judges novelty.
+        Paste a patent's claims (or title/abstract). When claims are present,
+        TK-Shield assesses novelty <span className="font-medium text-primary">claim
+        by claim</span> against the Traditional-Knowledge registry — the way an
+        examiner checks anticipation.
       </p>
 
       <textarea
@@ -95,15 +99,34 @@ function NoveltyResult({ data }: { data: NonNullable<ReturnType<typeof useNovelt
       <Card>
         <SectionHeader title="Assessment" icon={Scale} />
         <Markdown>{data.assessment || "No assessment generated."}</Markdown>
-        {!data.llm_used && (
+        {data.claim_level ? (
+          <p className="mt-2 text-xs text-muted">
+            Deterministic per-claim verdicts — computed from cosine similarity,
+            not the LLM, so they cannot be skewed by hallucination or text
+            injected in the patent.
+          </p>
+        ) : !data.llm_used ? (
           <p className="mt-2 text-xs text-muted">
             Offline narrative (LLM unavailable); similarity figures are exact.
           </p>
-        )}
+        ) : null}
       </Card>
 
+      {data.claim_level && data.claims.length > 0 && (
+        <div>
+          <SectionHeader title={`Claim-by-claim analysis (${data.claims.length})`} />
+          <div className="space-y-3">
+            {data.claims.map((c) => (
+              <ClaimCard key={c.number} claim={c} />
+            ))}
+          </div>
+        </div>
+      )}
+
       <div>
-        <SectionHeader title="Matching TK prior art" />
+        <SectionHeader
+          title={data.claim_level ? "All matching TK prior art" : "Matching TK prior art"}
+        />
         {data.matches.length === 0 ? (
           <EmptyState title="No documented TK matched this patent text." />
         ) : (
@@ -138,5 +161,46 @@ function NoveltyResult({ data }: { data: NonNullable<ReturnType<typeof useNovelt
         )}
       </div>
     </div>
+  );
+}
+
+// One parsed patent claim with its similarity-computed verdict and the TK prior
+// art that most closely matches it. Claim text is rendered as plain text (no
+// markdown/HTML) — no new XSS surface.
+function ClaimCard({ claim }: { claim: ClaimAssessment }) {
+  const top = claim.matches[0];
+  return (
+    <Card>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-primary">
+            Claim {claim.number}
+          </span>
+          <span className="rounded-full bg-neutral px-2 py-0.5 text-xs text-secondary">
+            {claim.is_dependent ? `dependent · claim ${claim.depends_on}` : "independent"}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <VerdictBadge verdict={claim.verdict} />
+          <span className="text-xs text-muted">
+            sim{" "}
+            <span className="tabular-nums text-secondary">
+              {claim.top_similarity.toFixed(2)}
+            </span>
+          </span>
+        </div>
+      </div>
+
+      <p className="mt-2 text-sm leading-relaxed text-secondary">{claim.text}</p>
+
+      {top && (
+        <p className="mt-2 text-xs text-muted">
+          Closest TK prior art:{" "}
+          <span className="font-medium text-secondary">{top.practice_name}</span>{" "}
+          ({top.tk_id}
+          {top.country ? `, ${top.country}` : ""})
+        </p>
+      )}
+    </Card>
   );
 }
