@@ -2,6 +2,8 @@
 
 import re
 
+from loguru import logger
+
 from src.search.vector_store import search as semantic_search
 from src.search.keyword_search import KeywordSearchEngine
 from src.utils.config import config
@@ -91,7 +93,7 @@ class HybridSearchEngine:
 
         # ChromaDB is already built (persistent on disk)
         self.patents = patents
-        print("✅ Hybrid search engine ready")
+        logger.info(f"Hybrid search engine ready ({len(patents)} patents)")
 
     def search(self, query: str, n_results: int = 5) -> list:
         """

@@ -12,7 +12,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
+from api.deps import limiter
 from api.routes import analyze, monitor, novelty, report, stats, tk
 from src.registry import tk_store
 from src.utils.config import config
@@ -50,6 +53,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Wire the shared rate limiter (C7): per-route `@limiter.limit(...)` decorators
+# enforce per-IP caps; this registers the limiter and the 429 handler. No global
+# middleware → static assets / SPA / health are unaffected.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.add_middleware(
     CORSMiddleware,
     # Defaults to "*" for local/single-host use; set CORS_ORIGINS in .env to a
@@ -85,8 +94,27 @@ app.include_router(stats.router)     # researcher
 # StaticFiles(html=True) only serves directory index files, not SPA routes.
 # Until the build is present we fall back to the archived legacy single-file UI.
 _FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
-_DIST = _FRONTEND / "dist"
+_DIST = (_FRONTEND / "dist").resolve()
 _INDEX = _DIST / "index.html"
+
+
+def _safe_static_file(full_path: str) -> Path | None:
+    """Resolve a request path to a real file *inside* `_DIST`, or None.
+
+    Security (C1): Starlette decodes `%2e%2e` → `..` and the `{full_path:path}`
+    converter does NOT normalize it, so a naive `_DIST / full_path` escapes the
+    build root (e.g. `/%2e%2e/%2e%2e/api/main.py` would read source / `.env` /
+    the SQLite registry). We resolve the candidate and require it to stay under
+    `_DIST` (`is_relative_to`) before serving — anything escaping returns None
+    and the caller falls back to the SPA shell.
+    """
+    if not full_path:
+        return None
+    candidate = (_DIST / full_path).resolve()
+    if candidate.is_file() and candidate.is_relative_to(_DIST):
+        return candidate
+    return None
+
 
 if _INDEX.exists():
     # Static assets (hashed JS/CSS/etc.) are served from /assets and friends.
@@ -95,11 +123,11 @@ if _INDEX.exists():
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa_fallback(full_path: str):
         # /api/* is handled by the routers above; anything else returns the SPA
-        # shell so the client router can resolve the route.
-        candidate = _DIST / full_path
-        if full_path and candidate.is_file():
-            return FileResponse(str(candidate))
-        return FileResponse(str(_INDEX))
+        # shell so the client router can resolve the route. A real, in-root file
+        # (validated by _safe_static_file) is served directly; everything else —
+        # including path-traversal attempts — returns the SPA index.
+        safe = _safe_static_file(full_path)
+        return FileResponse(str(safe)) if safe else FileResponse(str(_INDEX))
 
 elif (_FRONTEND / "legacy").exists():
     app.mount(

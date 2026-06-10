@@ -1,5 +1,8 @@
 # 🛡️ TK-Shield
 
+[![CI](https://github.com/Ansul-S/TK-Shield/actions/workflows/ci.yml/badge.svg)](https://github.com/Ansul-S/TK-Shield/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 ### Defensive bio-piracy monitoring for Traditional Knowledge
 
 TK-Shield protects documented **Traditional Knowledge (TK)** — traditional medicinal and agricultural practices such as *turmeric for wound healing* or *neem as a crop antifungal* — from patents that misappropriate it. It answers one question for the communities, NGOs, and patent offices that need it:
@@ -70,7 +73,7 @@ flowchart LR
 - **16,292** real US patents (PatentsView bulk — real titles, assignees, grant dates)
 - **2,030** documented TK practices (Dr. Duke CC0 ethnobotany + curated multilingual Wikidata)
 - **Keyless** end-to-end · **offline-first** · **no runtime CDN** · local LLM optional
-- Backend: **58** network-free tests · Frontend: **21** tests (incl. XSS-safety regressions)
+- Backend: **112** network-free tests · Frontend: **22** tests (incl. XSS-safety regressions)
 
 ---
 
@@ -82,6 +85,20 @@ flowchart LR
 - **Security by construction.** Server/LLM/user text is never injected as raw HTML; external links are scheme-validated; request inputs are bounded.
 
 ## Quick start
+
+### Fastest: Docker (instant landmark demo)
+
+```bash
+docker compose up --build      # → http://localhost:8000
+```
+
+Boots with the three landmark cases (turmeric / neem / basmati) seeded — a fully
+working Defender / Examiner / Researcher demo in seconds, **no API keys and no
+219 MB corpus download**. To run the full ~16k-patent corpus instead, build it
+inside the container (`docker compose exec app python -m src.ingestion.build_corpus`)
+or follow the manual steps below.
+
+### Full local setup
 
 ```bash
 # 1. Install (Python 3.11)
@@ -118,7 +135,7 @@ For live development with hot-reload, run the backend with `--reload` and `npm -
 ## Tests
 
 ```bash
-PYTHONPATH=. pytest tests/ -q          # backend — network-free, fixture-based
+pytest tests/                          # backend — network-free, fixture-based
 npm --prefix frontend run test         # frontend — Vitest (incl. XSS-safety)
 ```
 
@@ -159,6 +176,8 @@ accelerated with an AI coding assistant under my direction and review.
 ---
 
 ## Data & licensing
+
+The TK-Shield source code is released under the **[MIT License](LICENSE)**.
 
 Patent metadata from **PatentsView** (USPTO, public domain). Traditional-knowledge entries from **Dr. Duke’s Phytochemical & Ethnobotanical Databases** (USDA, CC0) and **Wikidata** (CC0). Prior-art enrichment via **PubMed** (NCBI E-utilities), **Wikidata**, and **GBIF**. TK-Shield is a defensive research tool; it surfaces and organizes public evidence and does not constitute legal advice.
 

@@ -1,18 +1,20 @@
 # api/routes/analyze.py — fast risk check: hybrid search + 5-factor score.
 # No LLM, no external enrichment — this is the quick "how risky is this?" call.
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
-from api.deps import get_engine, resolve_entry
+from api.deps import get_engine, limiter, resolve_entry
 from api.schemas import AnalyzeIn
 from src.classifier.ip_risk_scorer import score_risk
 from src.rag.retriever import build_query
+from src.utils.config import config
 
 router = APIRouter(prefix="/api/analyze", tags=["analyze"])
 
 
 @router.post("")
-def analyze(req: AnalyzeIn) -> dict:
+@limiter.limit(config.RATE_LIMIT_DEFAULT)
+def analyze(request: Request, req: AnalyzeIn) -> dict:
     try:
         entry = resolve_entry(
             tk_id=req.tk_id,

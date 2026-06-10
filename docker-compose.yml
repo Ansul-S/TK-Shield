@@ -1,0 +1,39 @@
+# TK-Shield — one-command demo.
+#
+#   docker compose up --build
+#   → open http://localhost:8000  (SPA + /api on one origin)
+#
+# Boots with the 3 landmark bio-piracy cases seeded (no 219MB download).
+# To run the FULL ~16k-patent corpus instead, build it on the host and point the
+# volumes at it, or exec the build inside the container, e.g.:
+#   docker compose exec app python -m src.ingestion.build_corpus
+#   docker compose exec app python -m src.ingestion.ingest_to_chromadb
+# (see CLAUDE.md "Build the data" for the keyless PatentsView bulk path).
+
+services:
+  app:
+    build: .
+    image: tk-shield:latest
+    ports:
+      - "8000:8000"
+    environment:
+      # Tighten before exposing to a network (defaults are demo-friendly).
+      CORS_ORIGINS: "*"
+      RATE_LIMIT_ENABLED: "true"
+      # The local Ollama LLM is optional; without it reports use the
+      # deterministic template. Point at a host Ollama to enable:
+      # OLLAMA_BASE_URL: "http://host.docker.internal:11434"
+    volumes:
+      # Persist the seeded corpus + registry across restarts.
+      - tk_chroma:/app/chroma_db
+      - tk_data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  tk_chroma:
+  tk_data:

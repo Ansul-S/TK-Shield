@@ -1,0 +1,12 @@
+# pyproject.toml — tooling config for TK-Shield.
+#
+# The project uses absolute `src.*` / `api.*` imports rooted at the repo root and
+# is run via `python -m ...`. This block puts the repo root on sys.path during
+# test collection so the documented `pytest tests/` invocation works the same as
+# `python -m pytest` (C2 — previously `pytest tests/` failed with
+# "No module named 'src'" because the root wasn't importable).
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
