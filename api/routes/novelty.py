@@ -39,7 +39,11 @@ def check_novelty(request: Request, req: NoveltyIn) -> dict:
 
     try:
         with llm_slot():  # bound concurrent expensive requests
-            return novelty.assess_novelty(text, n_results=req.n_results, llm=get_llm_client())
+            # Claim-level assessment when the pasted text has claim structure;
+            # falls back to whole-text automatically (claim_level=False).
+            return novelty.assess_novelty_by_claim(
+                text, n_results=req.n_results, llm=get_llm_client()
+            )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except LLMBusy as e:

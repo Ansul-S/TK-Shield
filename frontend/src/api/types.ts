@@ -127,19 +127,42 @@ export interface NoveltyBody {
   n_results?: number;
 }
 
+export interface NoveltyMatch {
+  tk_id: string;
+  practice_name: string;
+  domain: Domain;
+  country: string;
+  similarity: number;
+}
+
+// One parsed patent claim with its own similarity-computed verdict (Tier 2).
+export interface ClaimAssessment {
+  number: number;
+  text: string;
+  is_dependent: boolean;
+  depends_on: number | null;
+  verdict: Verdict;
+  confidence: "high" | "medium" | "low";
+  top_similarity: number;
+  matches: NoveltyMatch[];
+}
+
 export interface NoveltyResult {
   verdict: Verdict;
   confidence: "high" | "medium" | "low";
   top_similarity: number;
-  matches: {
-    tk_id: string;
-    practice_name: string;
-    domain: Domain;
-    country: string;
-    similarity: number;
-  }[];
+  matches: NoveltyMatch[];
   assessment: string;
   llm_used: boolean;
+  // Claim-level breakdown. `claim_level` is false when the pasted text had no
+  // parseable claim structure (e.g. an abstract) — `claims` is then empty and
+  // the UI shows the single whole-text view.
+  claim_level: boolean;
+  claims: ClaimAssessment[];
+  // True when verdicts + narrative are deterministic (the claim-level path):
+  // the LLM is deliberately not used to restate verdicts, so the note can never
+  // contradict the per-claim badges. Absent on the whole-text path.
+  deterministic_verdicts?: boolean;
 }
 
 export interface MonitorBody {
