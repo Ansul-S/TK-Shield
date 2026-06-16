@@ -171,7 +171,8 @@ accelerated with an AI coding assistant under my direction and review.
 
 ## Documentation
 
-- **[Project brief (PDF)](docs/TK-Shield-Whitepaper.pdf)** — problem, method, evaluation results, and WIPO policy alignment.
+- **[Full Project Report](docs/PROJECT_REPORT.md)** ([PDF](docs/TK-Shield-Project-Report.pdf)) — the complete story: problem, policy context, architecture, technical internals, design decisions, evaluation, security/hardening, and roadmap. Regenerate the PDF with `PYTHONPATH=. python docs/build_project_report.py`.
+- **[Project brief (PDF)](docs/TK-Shield-Whitepaper.pdf)** — concise problem, method, evaluation results, and WIPO policy alignment.
 
 ---
 
