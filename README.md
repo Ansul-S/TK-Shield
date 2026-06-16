@@ -65,7 +65,7 @@ flowchart LR
 ## Three personas, one platform
 
 - **🛡️ Defender** (communities / NGOs) — register a practice, run a risk check + full RAG report, monitor newly-filed patents, export an opposition draft. The risk recommendations point to real channels: **WIPO PATENTSCOPE**, **TKDL**, and the **WIPO IGC**.
-- **⚖️ Examiner** (patent offices) — paste a patent’s text and get a novelty verdict (LIKELY NOT NOVEL / POSSIBLE PRIOR ART / LIKELY NOVEL) against the documented TK registry, with the matching prior art.
+- **⚖️ Examiner** (patent offices) — paste a patent’s text and get a novelty verdict (LIKELY NOT NOVEL / POSSIBLE PRIOR ART / LIKELY NOVEL) against the documented TK registry, with the matching prior art. When claims are present, it assesses novelty **claim by claim** — splitting the patent into its individual (independent / dependent) claims and verdicting each against documented TK, the way an examiner checks anticipation. Verdicts are computed from similarity, not the LLM, so they are immune to prompt injection in the pasted text.
 - **📊 Researcher** — analytics across the registry and corpus: domains, geography, **documented communities & peoples**, and top assignees.
 
 ## At a glance
@@ -73,7 +73,7 @@ flowchart LR
 - **16,292** real US patents (PatentsView bulk — real titles, assignees, grant dates)
 - **2,030** documented TK practices (Dr. Duke CC0 ethnobotany + curated multilingual Wikidata)
 - **Keyless** end-to-end · **offline-first** · **no runtime CDN** · local LLM optional
-- Backend: **112** network-free tests · Frontend: **22** tests (incl. XSS-safety regressions)
+- Backend: **121** network-free tests · Frontend: **22** tests (incl. XSS-safety regressions) · CI on every push
 
 ---
 
@@ -82,7 +82,7 @@ flowchart LR
 - **Free & keyless first.** The entire pipeline runs with **zero API keys** on public-domain / open data and a local model. No paid or registration-gated services.
 - **Graceful degradation.** No external source (or the LLM) can crash the pipeline; clients return empty on failure and reports note what was skipped. Everything works offline.
 - **Citations, not hand-waving.** Every claim carries a stable reference ID.
-- **Security by construction.** Server/LLM/user text is never injected as raw HTML; external links are scheme-validated; request inputs are bounded.
+- **Security by construction.** Server/LLM/user text is never injected as raw HTML; external links are scheme-validated; request inputs are bounded; static file serving is path-traversal-safe; LLM-backed endpoints are bounded and per-IP rate-limited.
 
 ## Quick start
 
@@ -150,14 +150,14 @@ misappropriation.** Known limits:
 - **Risk model** — interpretable hand-weighted factors, not learned from a labelled dataset.
 - **Evaluation** — demonstrated on the three landmark cases plus three benign controls (0% false positives) and a retrieval ablation; this is a small canonical-case demonstration, **not** a population-scale labelled benchmark with precision/recall measured across many patents and phrasings.
 - **Data** — the ethnobotany source is broad but skews to English-documented knowledge, under-representing some communities.
-- **Deployment** — hardened for local/single-user; **no authentication, rate limiting, or restricted CORS** — the gating items for any public hosting.
+- **Deployment** — hardened for local/single-user: per-IP rate limiting, configurable CORS, bounded inputs, and path-traversal-safe static serving are in place, but there is **no authentication / multi-tenancy** — the gating item for shared public hosting.
 
 ## Future work
 
 - A larger, expert-labelled evaluation benchmark (precision/recall at scale).
 - Full-text and non-US patent coverage; multilingual TK ingestion at scale.
 - Continuous monitoring + alerting for newly-filed patents.
-- Multi-tenant deployment (auth, rate limiting, CORS) for institutional use.
+- Multi-tenant deployment (authentication / per-org isolation) for institutional use — building on the rate limiting and configurable CORS already in place.
 - Community consent and governance as a first-class feature.
 
 ## Author & role
@@ -171,7 +171,8 @@ accelerated with an AI coding assistant under my direction and review.
 
 ## Documentation
 
-- **[Project brief (PDF)](docs/TK-Shield-Whitepaper.pdf)** — problem, method, evaluation results, and WIPO policy alignment.
+- **[Full Project Report](docs/PROJECT_REPORT.md)** ([PDF](docs/TK-Shield-Project-Report.pdf)) — the complete story: problem, policy context, architecture, technical internals, design decisions, evaluation, security/hardening, and roadmap. Regenerate the PDF with `PYTHONPATH=. python docs/build_project_report.py`.
+- **[Project brief (PDF)](docs/TK-Shield-Whitepaper.pdf)** — concise problem, method, evaluation results, and WIPO policy alignment.
 
 ---
 
